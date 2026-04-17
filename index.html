@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>coccolith</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #00000a; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #hud {
+      position: fixed; top: 14px; left: 16px;
+      color: rgba(255,255,255,0.5); font: 11px monospace;
+      pointer-events: none; line-height: 1.8;
+    }
+    #compass {
+      position: fixed; top: 10px; right: 10px;
+      pointer-events: none;
+    }
+    #veth-ind {
+      position: fixed; width: 28px; height: 28px;
+      pointer-events: none;
+    }
+    #ctrl {
+      position: fixed; bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.3); font: 11px monospace;
+      pointer-events: none; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">🌐 coccolith &nbsp;|&nbsp; 🌕 veth</div>
+  <canvas id="compass" width="88" height="88"></canvas>
+  <canvas id="veth-ind" width="28" height="28"></canvas>
+  <div id="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
