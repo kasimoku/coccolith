@@ -7,7 +7,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #00000a; overflow: hidden; }
-    canvas { display: block; width: 100vw; height: 100vh; }
+    #c { display: block; width: 100vw; height: 100vh; }
     #hud {
       position: fixed; top: 14px; left: 16px;
       color: rgba(255,255,255,0.5); font: 11px monospace;
@@ -34,7 +34,12 @@
   <div id="hud">🌐 coccolith &nbsp;|&nbsp; 🌕 veth</div>
   <canvas id="compass" width="88" height="88"></canvas>
   <canvas id="veth-ind" width="28" height="28"></canvas>
-  <div id="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし</div>
+  <div id="overview-cursor" style="
+    display: none; position: fixed;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 20px; pointer-events: none; line-height: 1;
+  ">🔴</div>
+  <div id="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし &nbsp;|&nbsp; Tab 俯瞰切替</div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

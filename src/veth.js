@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { R_V } from './main.js'
+import { R_V } from './constants.js'
 
 // ============================================================
 //  veth — 衛星メッシュ（Claude 担当）
