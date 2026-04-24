@@ -2,14 +2,16 @@ import * as THREE from 'three'
 import { createNoise3D } from 'simplex-noise'
 import Alea from 'alea'
 import { R_C, LAND_LIFT } from './constants.js'
+import { createTORCH } from '../../my-3d-parts/landmark/TORCH.js'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
 // ============================================================
 
-const LAND_COLOR   = 0x3d6b30
-const LAND_COLOR_N = 0x337367 // y軸+側（北半球）陸地色
-const SEA_COLOR    = 0x1a4a52 // 海底色
+const LAND_COLOR      = 0x3d6b30
+const LAND_COLOR_N    = 0x337367 // y軸+側（北半球）陸地色
+const ISLAND_GF_COLOR = 0x90876D // 島[GF] (lat 0-36°N, lon 72-108°E)
+const SEA_COLOR       = 0x1a4a52 // 海底色
 const R_OCEAN      = 724.5    // 海面球の半径 (m)
 const OCEAN_COLOR  = 0x629ec1
 const OCEAN_ALPHA  = 0.8
@@ -69,9 +71,10 @@ export function createCoccolith() {
 
   // 頂点ごとにノイズを評価して押し出し & 頂点カラーを設定
   const colors = new Float32Array(pos.count * 3)
-  const landRGB  = new THREE.Color(LAND_COLOR)
-  const landNRGB = new THREE.Color(LAND_COLOR_N)
-  const seaRGB   = new THREE.Color(SEA_COLOR)
+  const landRGB      = new THREE.Color(LAND_COLOR)
+  const landNRGB     = new THREE.Color(LAND_COLOR_N)
+  const islandGFRGB  = new THREE.Color(ISLAND_GF_COLOR)
+  const seaRGB       = new THREE.Color(SEA_COLOR)
 
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
@@ -129,7 +132,13 @@ export function createCoccolith() {
 
     pos.setXYZ(i, x * scale, y * scale, z * scale)
 
-    const c = isLand ? (y > 0 ? landNRGB : landRGB) : seaRGB
+    const lat = Math.asin(Math.max(-1, Math.min(1, ny))) * 180 / Math.PI
+    let lonTheta = Math.atan2(nz, nx)
+    if (lonTheta < 0) lonTheta += Math.PI * 2
+    const lon = lonTheta * 180 / Math.PI - 180
+    const inIslandGF = isLand && lat >= 0 && lat <= 36 && lon >= 72 && lon <= 108
+
+    const c = inIslandGF ? islandGFRGB : isLand ? (y > 0 ? landNRGB : landRGB) : seaRGB
     colors[i * 3]     = c.r
     colors[i * 3 + 1] = c.g
     colors[i * 3 + 2] = c.b
@@ -156,7 +165,78 @@ export function createCoccolith() {
   // --- 緯度経度グリッド ----------------------------------------
   group.add(createLatLonGrid())
 
+  // --- 島[GF] 岩散布 ------------------------------------------
+  group.add(createIslandGFRocks(noise3D))
+
+  // --- ランドマーク #01: TORCH (-X軸頂点, lat=0 lon=0) -------
+  // scale=115/16でy高さ115m。TI先端がwrapper原点より-12.4m下なので
+  // radius=724で地表727mから約15m埋まる位置になる。
+  const torchWrapper = new THREE.Group()
+  torchWrapper.add(createTORCH())
+  torchWrapper.scale.setScalar(115 / 16)
+  placeOnSurface(group, torchWrapper, 0, 0, 724)
+
   return { group, terrainMeshes }
+}
+
+// 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
+// 底面クランプなし・全軸ランダム回転。draw call = 形状数（3回）
+function createIslandGFRocks(noise3D) {
+  const rng   = Alea('islandGF-scatter')
+  const dummy = new THREE.Object3D()
+  const group = new THREE.Group()
+
+  const configs = [
+    { geo: new THREE.IcosahedronGeometry(1, 0),  color: 0x7a7872, count:  80 },
+    { geo: new THREE.DodecahedronGeometry(1, 0), color: 0x8a8a8a, count:  70 },
+    { geo: new THREE.IcosahedronGeometry(1, 0),  color: 0x969490, count:  50 },
+  ]
+
+  for (const { geo, color, count } of configs) {
+    const mat   = new THREE.MeshLambertMaterial({ color, flatShading: true })
+    const iMesh = new THREE.InstancedMesh(geo, mat, count)
+    let placed = 0, tries = 0
+
+    while (placed < count && tries < count * 20) {
+      tries++
+      const lat = 3  + rng() * 22   // 3°〜25°N
+      const lon = 90 + rng() * 6    // 90°〜96°E 均一
+
+      const phi   = (90 - lat) * Math.PI / 180
+      const theta = (lon + 180) * Math.PI / 180
+      const nx = Math.sin(phi) * Math.cos(theta)
+      const ny = Math.cos(phi)
+      const nz = Math.sin(phi) * Math.sin(theta)
+
+      // 地形と同じノイズ式で陸地判定
+      const n = noise3D(nx * 1.8, ny * 1.8, nz * 1.8) * 0.7
+              + noise3D(nx * 4.2, ny * 4.2, nz * 4.2) * 0.2
+              + noise3D(nx * 9.0, ny * 9.0, nz * 9.0) * 0.1
+      if (n < LAND_THRESHOLD || Math.abs(ny) < 5 / R_C) continue
+
+      // 低周波ノイズで分布を偏らせる（棄却サンプリング）
+      // 周波数を上げるとクラスターが細かくなる
+      const cluster = Math.pow(noise3D(nx, ny, nz) * 0.5 + 0.5, 3)  // 0〜1、低値を強く抑制
+      if (rng() > cluster) continue
+
+      const s = 1 + rng() * 2        // 1〜3m
+      dummy.position.set(nx, ny, nz).multiplyScalar(R_C + LAND_LIFT - s * 0.3)
+      dummy.quaternion
+        .setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(nx, ny, nz))
+        .multiply(new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(rng() * Math.PI * 2, rng() * Math.PI * 2, rng() * Math.PI * 2)
+        ))
+      dummy.scale.setScalar(s)
+      dummy.updateMatrix()
+      iMesh.setMatrixAt(placed++, dummy.matrix)
+    }
+
+    iMesh.count = placed
+    iMesh.instanceMatrix.needsUpdate = true
+    group.add(iMesh)
+  }
+
+  return group
 }
 
 // 緯度10分割・経度10分割のグリッドを LineSegments で生成

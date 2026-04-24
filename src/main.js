@@ -175,8 +175,8 @@ function animate() {
     const axisWS = new THREE.Vector3().crossVectors(pDir, pFwd)
     if (keys['KeyW']) { pDir.applyAxisAngle(axisWS,  da); pDir.normalize() }
     if (keys['KeyS']) { pDir.applyAxisAngle(axisWS, -da); pDir.normalize() }
-    if (keys['KeyD']) { pDir.applyAxisAngle(pFwd, -da);   pDir.normalize() }
-    if (keys['KeyA']) { pDir.applyAxisAngle(pFwd,  da);   pDir.normalize() }
+    if (keys['KeyD']) { pDir.applyAxisAngle(pFwd,  da);   pDir.normalize() }
+    if (keys['KeyA']) { pDir.applyAxisAngle(pFwd, -da);   pDir.normalize() }
 
     pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
     pFwd.normalize()
