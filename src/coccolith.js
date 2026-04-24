@@ -12,7 +12,7 @@ const LAND_COLOR      = 0x3d6b30
 const LAND_COLOR_N    = 0x337367 // y軸+側（北半球）陸地色
 const ISLAND_GF_COLOR = 0x90876D // 島[GF] (lat 0-36°N, lon 72-108°E)
 const SEA_COLOR       = 0x1a4a52 // 海底色
-const R_OCEAN      = 724.5    // 海面球の半径 (m)
+const R_OCEAN      = 364.5    // 海面球の半径 (m)
 const OCEAN_COLOR  = 0x629ec1
 const OCEAN_ALPHA  = 0.8
 
@@ -29,26 +29,26 @@ export function createCoccolith() {
 
   const noise3D = createNoise3D(Alea('coccolith'))
 
-  // --- 山定義: 1段=35m幅・総半径105m（3段共通） ---
+  // --- 山定義: 1段=35m幅 ---
   const HILL_STEP = 35
 
-  // 山A: lat:-13.4° lon:-137.4° / 頂点20・中段6・裾段3
+  // 山A: lat:-13.4° lon:-137.4° / 頂点20・中段6
   const hillADir = new THREE.Vector3(
     Math.sin((90 - (-13.4)) * Math.PI / 180) * Math.cos((-137.4 + 180) * Math.PI / 180),
     Math.cos((90 - (-13.4)) * Math.PI / 180),
     Math.sin((90 - (-13.4)) * Math.PI / 180) * Math.sin((-137.4 + 180) * Math.PI / 180),
   )
 
-  // 山B: lat:-10.5° lon:-171.0° / 頂点9・中段6・裾段3
+  // 山B: lat:-10.5° lon:-171.0° / 頂点9・中段6
   const hillBDir = new THREE.Vector3(
     Math.sin((90 - (-10.5)) * Math.PI / 180) * Math.cos((-171.0 + 180) * Math.PI / 180),
     Math.cos((90 - (-10.5)) * Math.PI / 180),
     Math.sin((90 - (-10.5)) * Math.PI / 180) * Math.sin((-171.0 + 180) * Math.PI / 180),
   )
 
-  // 山C: lat:-53.0° lon:-44.8° / 4段・頂点20・中断1 20・中断3 10・裾段6
-  // 山D: lat:67.9° lon:-123.2° / 3段・頂点12・中断6・裾段2
-  // 山E: lat:62.0° lon:-101.4° / 4段・頂点16・中断1 8・中断2 6・裾段2
+  // 山C: lat:-53.0° lon:-44.8° / 3段・頂点20・中断1 20・中断3 10
+  // 山D: lat:67.9° lon:-123.2° / 2段・頂点12・中断6
+  // 山E: lat:62.0° lon:-101.4° / 3段・頂点16・中断1 8・中断2 6
   const hillCDir = new THREE.Vector3(
     Math.sin((90 - (-53.0)) * Math.PI / 180) * Math.cos((-44.8 + 180) * Math.PI / 180),
     Math.cos((90 - (-53.0)) * Math.PI / 180),
@@ -86,7 +86,7 @@ export function createCoccolith() {
             + noise3D(nx * 9.0, ny * 9.0, nz * 9.0) * 0.1
 
     // 赤道面(y=0)から±5m 以内は川として強制的に海扱い
-    const isRiver = Math.abs(y) < 5
+    const isRiver = Math.abs(y) < 6
     // 北極・南極から半径5m（10×10相当）は強制的に陸地
     const dNorth = Math.sqrt(x*x + (y-R_C)*(y-R_C) + z*z)
     const dSouth = Math.sqrt(x*x + (y+R_C)*(y+R_C) + z*z)
@@ -94,33 +94,28 @@ export function createCoccolith() {
     const arcDistA = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillADir.x + ny * hillADir.y + nz * hillADir.z)))
     const liftA    = arcDistA < HILL_STEP     ? 20
                    : arcDistA < HILL_STEP * 2 ? 6
-                   : arcDistA < HILL_STEP * 3 ? 3
                    : 0
 
     const arcDistB = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillBDir.x + ny * hillBDir.y + nz * hillBDir.z)))
     const liftB    = arcDistB < HILL_STEP     ? 9
                    : arcDistB < HILL_STEP * 2 ? 6
-                   : arcDistB < HILL_STEP * 3 ? 3
                    : 0
 
     const arcDistC = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillCDir.x + ny * hillCDir.y + nz * hillCDir.z)))
     const liftC    = arcDistC < HILL_STEP     ? 20
                    : arcDistC < HILL_STEP * 2 ? 20
                    : arcDistC < HILL_STEP * 3 ? 10
-                   : arcDistC < HILL_STEP * 4 ? 6
                    : 0
 
     const arcDistD = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillDDir.x + ny * hillDDir.y + nz * hillDDir.z)))
     const liftD    = arcDistD < HILL_STEP     ? 12
                    : arcDistD < HILL_STEP * 2 ? 6
-                   : arcDistD < HILL_STEP * 3 ? 2
                    : 0
 
     const arcDistE = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillEDir.x + ny * hillEDir.y + nz * hillEDir.z)))
     const liftE    = arcDistE < HILL_STEP     ? 16
                    : arcDistE < HILL_STEP * 2 ? 8
                    : arcDistE < HILL_STEP * 3 ? 6
-                   : arcDistE < HILL_STEP * 4 ? 2
                    : 0
 
     const hillLift = Math.max(liftA, liftB, liftC, liftD, liftE)
@@ -170,11 +165,11 @@ export function createCoccolith() {
 
   // --- ランドマーク #01: TORCH (-X軸頂点, lat=0 lon=0) -------
   // scale=115/16でy高さ115m。TI先端がwrapper原点より-12.4m下なので
-  // radius=724で地表727mから約15m埋まる位置になる。
+  // radius=364で地表367mから約15m埋まる位置になる。
   const torchWrapper = new THREE.Group()
   torchWrapper.add(createTORCH())
   torchWrapper.scale.setScalar(115 / 16)
-  placeOnSurface(group, torchWrapper, 0, 0, 724)
+  placeOnSurface(group, torchWrapper, 0, 0, 364)
 
   return { group, terrainMeshes }
 }
@@ -241,7 +236,7 @@ function createIslandGFRocks(noise3D) {
 
 // 緯度10分割・経度10分割のグリッドを LineSegments で生成
 // 座標系: theta = (lon + 180) * PI/180, phi = (90 - lat) * PI/180
-const GRID_R   = 727.5  // グリッド球半径 (m)
+const GRID_R   = 367.5  // グリッド球半径 (m)
 const GRID_SEGS = 96    // 1本の円を近似するセグメント数
 
 function createLatLonGrid() {
