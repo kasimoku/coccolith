@@ -16,10 +16,66 @@ const R_OCEAN      = 364.5    // 海面球の半径 (m)
 const OCEAN_COLOR  = 0x629ec1
 const OCEAN_ALPHA  = 0.8
 
+// ---- 道路 -------------------------------------------------------
+const ROAD_HALF_WIDTH = 17.5   // 道幅35m の半分 (m)
+const ROAD_COLOR      = 0x6D7058
+
+// 複数の道を座標リストで定義する。各 waypoints は {lat, lon} の配列。
+const ROUTES = [
+  {
+    name: 'Route1',
+    waypoints: [
+      { lat:  8.4, lon: -133.0 },
+      { lat: 16.0, lon: -143.0 },
+      { lat: 27.0, lon: -143.0 },
+      { lat: 51.0, lon:  178.0 },
+      { lat: 44.0, lon:  165.4 },
+      { lat: 21.0, lon:  156.0 },
+      { lat:  4.7, lon:  156.0 },
+      { lat:  4.7, lon: -171.8 },
+      { lat: -4.5, lon: -171.8 },
+      { lat: -4.5, lon:  122.7 },
+      { lat:-25.8, lon:  122.7 },
+      { lat:-46.6, lon:   93.0 },
+      { lat:-58.0, lon:   93.0 },
+      { lat:-64.2, lon:  127.0 },
+      { lat:-64.4, lon:  155.5 },
+      { lat:-54.4, lon:  177.5 },
+      { lat:-48.6, lon: -169.9 },
+      { lat:-48.6, lon: -149.3 },
+      { lat:-29.0, lon: -140.0 },
+      { lat:-14.0, lon: -133.0 },
+    ],
+  },
+]
+
 // ノイズ閾値: 正規分布に近い simplex noise で陸地 ~60% になる値
 // simplex-noise の出力範囲は [-1, 1]。
 // 面積比は閾値を下げると陸地が増える。経験的に -0.08 付近で ~60%。
 const LAND_THRESHOLD = -0.08
+
+// 単位ベクトル (px,py,pz) から大円弧セグメント {ax,ay,az,bx,by,bz,gnx,gny,gnz} への
+// 球面距離 (m) を返す。セグメント外なら端点への距離を返す。
+function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
+  const sinXt = px*gnx + py*gny + pz*gnz
+  const dXt   = Math.abs(Math.asin(Math.max(-1, Math.min(1, sinXt)))) * R_C
+  // 大円上の最近点（垂線の足）
+  const fpx = px - sinXt*gnx, fpy = py - sinXt*gny, fpz = pz - sinXt*gnz
+  const flen = Math.sqrt(fpx*fpx + fpy*fpy + fpz*fpz)
+  if (flen < 1e-10) {
+    const dA = R_C * Math.acos(Math.max(-1, Math.min(1, px*ax + py*ay + pz*az)))
+    const dB = R_C * Math.acos(Math.max(-1, Math.min(1, px*bx + py*by + pz*bz)))
+    return Math.min(dA, dB)
+  }
+  const fux = fpx/flen, fuy = fpy/flen, fuz = fpz/flen
+  // 垂線の足が弧 A→B の内側にあるか確認
+  const afN = (ay*fuz - az*fuy)*gnx + (az*fux - ax*fuz)*gny + (ax*fuy - ay*fux)*gnz
+  const fbN = (fuy*bz - fuz*by)*gnx + (fuz*bx - fux*bz)*gny + (fux*by - fuy*bx)*gnz
+  if (afN >= 0 && fbN >= 0) return dXt
+  const dA = R_C * Math.acos(Math.max(-1, Math.min(1, px*ax + py*ay + pz*az)))
+  const dB = R_C * Math.acos(Math.max(-1, Math.min(1, px*bx + py*by + pz*bz)))
+  return Math.min(dA, dB)
+}
 
 // { group, terrainMeshes } を返す
 // terrainMeshes: レイキャスト対象メッシュ（山などを追加する時はここに push する）
@@ -68,6 +124,23 @@ export function createCoccolith() {
   // --- 地表メッシュ -------------------------------------------
   const geo = new THREE.SphereGeometry(R_C, 64, 64)
   const pos = geo.attributes.position
+
+  // 道路セグメントを事前計算 (大円法線 gnx,gny,gnz 付き)
+  const roadRGB  = new THREE.Color(ROAD_COLOR)
+  const roadSegs = []
+  for (const route of ROUTES) {
+    for (let si = 0; si < route.waypoints.length - 1; si++) {
+      const wA = route.waypoints[si], wB = route.waypoints[si + 1]
+      const phiA = (90 - wA.lat) * Math.PI / 180, thetaA = (wA.lon + 180) * Math.PI / 180
+      const phiB = (90 - wB.lat) * Math.PI / 180, thetaB = (wB.lon + 180) * Math.PI / 180
+      const ax = Math.sin(phiA)*Math.cos(thetaA), ay = Math.cos(phiA), az = Math.sin(phiA)*Math.sin(thetaA)
+      const bx = Math.sin(phiB)*Math.cos(thetaB), by = Math.cos(phiB), bz = Math.sin(phiB)*Math.sin(thetaB)
+      const cx = ay*bz - az*by, cy = az*bx - ax*bz, cz = ax*by - ay*bx
+      const clen = Math.sqrt(cx*cx + cy*cy + cz*cz)
+      if (clen < 1e-10) continue
+      roadSegs.push({ ax, ay, az, bx, by, bz, gnx: cx/clen, gny: cy/clen, gnz: cz/clen })
+    }
+  }
 
   // 頂点ごとにノイズを評価して押し出し & 頂点カラーを設定
   const colors = new Float32Array(pos.count * 3)
@@ -137,6 +210,18 @@ export function createCoccolith() {
     colors[i * 3]     = c.r
     colors[i * 3 + 1] = c.g
     colors[i * 3 + 2] = c.b
+
+    // 道路オーバーレイ: 陸地かつ道中心線から ROAD_HALF_WIDTH 以内なら道色に上書き
+    if (isLand) {
+      for (const seg of roadSegs) {
+        if (arcDistToSeg(nx, ny, nz, seg) < ROAD_HALF_WIDTH) {
+          colors[i * 3]     = roadRGB.r
+          colors[i * 3 + 1] = roadRGB.g
+          colors[i * 3 + 2] = roadRGB.b
+          break
+        }
+      }
+    }
   }
 
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
