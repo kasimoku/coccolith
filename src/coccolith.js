@@ -18,12 +18,12 @@ const OCEAN_ALPHA  = 0.8
 
 // ---- 道路 -------------------------------------------------------
 const ROAD_HALF_WIDTH = 17.5   // 道幅35m の半分 (m)
-const ROAD_COLOR      = 0x6D7058
 
 // 複数の道を座標リストで定義する。各 waypoints は {lat, lon} の配列。
 const ROUTES = [
   {
     name: 'Route1',
+    color: 0x6D7058,
     waypoints: [
       { lat:  8.4, lon: -133.0 },
       { lat: 16.0, lon: -143.0 },
@@ -45,6 +45,20 @@ const ROUTES = [
       { lat:-48.6, lon: -149.3 },
       { lat:-29.0, lon: -140.0 },
       { lat:-14.0, lon: -133.0 },
+    ],
+  },
+  {
+    name: 'Route2',
+    color: 0x7A8E8E,
+    waypoints: [
+      { lat: 23.5, lon:  57.0 },
+      { lat:  4.0, lon:  18.0 },
+      { lat:  4.0, lon:  -1.0 },
+      { lat: 33.5, lon:  -1.0 },
+      { lat: 46.0, lon:  25.0 },
+      { lat: 49.4, lon:  51.4 },
+      { lat: 40.0, lon: 107.7 },
+      { lat: 20.3, lon: 117.0 },
     ],
   },
 ]
@@ -125,10 +139,10 @@ export function createCoccolith() {
   const geo = new THREE.SphereGeometry(R_C, 64, 64)
   const pos = geo.attributes.position
 
-  // 道路セグメントを事前計算 (大円法線 gnx,gny,gnz 付き)
-  const roadRGB  = new THREE.Color(ROAD_COLOR)
+  // 道路セグメントを事前計算 (大円法線 gnx,gny,gnz + ルート色 付き)
   const roadSegs = []
   for (const route of ROUTES) {
+    const rgb = new THREE.Color(route.color)
     for (let si = 0; si < route.waypoints.length - 1; si++) {
       const wA = route.waypoints[si], wB = route.waypoints[si + 1]
       const phiA = (90 - wA.lat) * Math.PI / 180, thetaA = (wA.lon + 180) * Math.PI / 180
@@ -138,7 +152,7 @@ export function createCoccolith() {
       const cx = ay*bz - az*by, cy = az*bx - ax*bz, cz = ax*by - ay*bx
       const clen = Math.sqrt(cx*cx + cy*cy + cz*cz)
       if (clen < 1e-10) continue
-      roadSegs.push({ ax, ay, az, bx, by, bz, gnx: cx/clen, gny: cy/clen, gnz: cz/clen })
+      roadSegs.push({ ax, ay, az, bx, by, bz, gnx: cx/clen, gny: cy/clen, gnz: cz/clen, r: rgb.r, g: rgb.g, b: rgb.b })
     }
   }
 
@@ -215,9 +229,9 @@ export function createCoccolith() {
     if (isLand) {
       for (const seg of roadSegs) {
         if (arcDistToSeg(nx, ny, nz, seg) < ROAD_HALF_WIDTH) {
-          colors[i * 3]     = roadRGB.r
-          colors[i * 3 + 1] = roadRGB.g
-          colors[i * 3 + 2] = roadRGB.b
+          colors[i * 3]     = seg.r
+          colors[i * 3 + 1] = seg.g
+          colors[i * 3 + 2] = seg.b
           break
         }
       }
@@ -247,6 +261,9 @@ export function createCoccolith() {
 
   // --- 島[GF] 岩散布 ------------------------------------------
   group.add(createIslandGFRocks(noise3D))
+
+  // --- 道路マーカー (10m間隔 Points) ---------------------------
+  group.add(createRoutePoints(ROUTES))
 
   // --- ランドマーク #01: TORCH (-X軸頂点, lat=0 lon=0) -------
   // scale=115/16でy高さ115m。TI先端がwrapper原点より-12.4m下なので
@@ -382,3 +399,44 @@ export function placeOnSurface(group, object, lat, lon, radius = R_C) {
 
   group.add(object)
 }
+
+// 全ルートの大円弧上に INTERVAL m 間隔で Points を配置
+function createRoutePoints(routes, interval = 10) {
+  const positions = []
+
+  for (const route of routes) {
+    for (let si = 0; si < route.waypoints.length - 1; si++) {
+      const wA = route.waypoints[si], wB = route.waypoints[si + 1]
+      const phiA = (90 - wA.lat) * Math.PI / 180, thetaA = (wA.lon + 180) * Math.PI / 180
+      const phiB = (90 - wB.lat) * Math.PI / 180, thetaB = (wB.lon + 180) * Math.PI / 180
+      const ax = Math.sin(phiA)*Math.cos(thetaA), ay = Math.cos(phiA), az = Math.sin(phiA)*Math.sin(thetaA)
+      const bx = Math.sin(phiB)*Math.cos(thetaB), by = Math.cos(phiB), bz = Math.sin(phiB)*Math.sin(thetaB)
+
+      const dot   = Math.max(-1, Math.min(1, ax*bx + ay*by + az*bz))
+      const angle = Math.acos(dot)
+      const arcLen = R_C * angle
+      if (arcLen < 1e-6) continue
+
+      const sinA = Math.sin(angle)
+      const count = Math.floor(arcLen / interval)
+      for (let k = 0; k <= count; k++) {
+        const t  = (k * interval) / arcLen
+        if (t > 1) break
+        const w1 = Math.sin((1 - t) * angle) / sinA
+        const w2 = Math.sin(t * angle) / sinA
+        const r  = R_C + LAND_LIFT + 1
+        positions.push(
+          (w1*ax + w2*bx) * r,
+          (w1*ay + w2*by) * r,
+          (w1*az + w2*bz) * r,
+        )
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: true })
+  return new THREE.Points(geo, mat)
+}
+
