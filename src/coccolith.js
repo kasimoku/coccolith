@@ -27,6 +27,42 @@ export function createCoccolith() {
 
   const noise3D = createNoise3D(Alea('coccolith'))
 
+  // --- 山定義: 1段=35m幅・総半径105m（3段共通） ---
+  const HILL_STEP = 35
+
+  // 山A: lat:-13.4° lon:-137.4° / 頂点20・中段6・裾段3
+  const hillADir = new THREE.Vector3(
+    Math.sin((90 - (-13.4)) * Math.PI / 180) * Math.cos((-137.4 + 180) * Math.PI / 180),
+    Math.cos((90 - (-13.4)) * Math.PI / 180),
+    Math.sin((90 - (-13.4)) * Math.PI / 180) * Math.sin((-137.4 + 180) * Math.PI / 180),
+  )
+
+  // 山B: lat:-10.5° lon:-171.0° / 頂点9・中段6・裾段3
+  const hillBDir = new THREE.Vector3(
+    Math.sin((90 - (-10.5)) * Math.PI / 180) * Math.cos((-171.0 + 180) * Math.PI / 180),
+    Math.cos((90 - (-10.5)) * Math.PI / 180),
+    Math.sin((90 - (-10.5)) * Math.PI / 180) * Math.sin((-171.0 + 180) * Math.PI / 180),
+  )
+
+  // 山C: lat:-53.0° lon:-44.8° / 4段・頂点20・中断1 20・中断3 10・裾段6
+  // 山D: lat:67.9° lon:-123.2° / 3段・頂点12・中断6・裾段2
+  // 山E: lat:62.0° lon:-101.4° / 4段・頂点16・中断1 8・中断2 6・裾段2
+  const hillCDir = new THREE.Vector3(
+    Math.sin((90 - (-53.0)) * Math.PI / 180) * Math.cos((-44.8 + 180) * Math.PI / 180),
+    Math.cos((90 - (-53.0)) * Math.PI / 180),
+    Math.sin((90 - (-53.0)) * Math.PI / 180) * Math.sin((-44.8 + 180) * Math.PI / 180),
+  )
+  const hillDDir = new THREE.Vector3(
+    Math.sin((90 - 67.9)    * Math.PI / 180) * Math.cos((-123.2 + 180) * Math.PI / 180),
+    Math.cos((90 - 67.9)    * Math.PI / 180),
+    Math.sin((90 - 67.9)    * Math.PI / 180) * Math.sin((-123.2 + 180) * Math.PI / 180),
+  )
+  const hillEDir = new THREE.Vector3(
+    Math.sin((90 - 62.0)    * Math.PI / 180) * Math.cos((-101.4 + 180) * Math.PI / 180),
+    Math.cos((90 - 62.0)    * Math.PI / 180),
+    Math.sin((90 - 62.0)    * Math.PI / 180) * Math.sin((-101.4 + 180) * Math.PI / 180),
+  )
+
   // --- 地表メッシュ -------------------------------------------
   const geo = new THREE.SphereGeometry(R_C, 64, 64)
   const pos = geo.attributes.position
@@ -52,10 +88,44 @@ export function createCoccolith() {
     const dNorth = Math.sqrt(x*x + (y-R_C)*(y-R_C) + z*z)
     const dSouth = Math.sqrt(x*x + (y+R_C)*(y+R_C) + z*z)
     const isPole = dNorth < 5 || dSouth < 5
-    const isLand = (n >= LAND_THRESHOLD && !isRiver) || isPole
+    const arcDistA = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillADir.x + ny * hillADir.y + nz * hillADir.z)))
+    const liftA    = arcDistA < HILL_STEP     ? 20
+                   : arcDistA < HILL_STEP * 2 ? 6
+                   : arcDistA < HILL_STEP * 3 ? 3
+                   : 0
+
+    const arcDistB = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillBDir.x + ny * hillBDir.y + nz * hillBDir.z)))
+    const liftB    = arcDistB < HILL_STEP     ? 9
+                   : arcDistB < HILL_STEP * 2 ? 6
+                   : arcDistB < HILL_STEP * 3 ? 3
+                   : 0
+
+    const arcDistC = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillCDir.x + ny * hillCDir.y + nz * hillCDir.z)))
+    const liftC    = arcDistC < HILL_STEP     ? 20
+                   : arcDistC < HILL_STEP * 2 ? 20
+                   : arcDistC < HILL_STEP * 3 ? 10
+                   : arcDistC < HILL_STEP * 4 ? 6
+                   : 0
+
+    const arcDistD = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillDDir.x + ny * hillDDir.y + nz * hillDDir.z)))
+    const liftD    = arcDistD < HILL_STEP     ? 12
+                   : arcDistD < HILL_STEP * 2 ? 6
+                   : arcDistD < HILL_STEP * 3 ? 2
+                   : 0
+
+    const arcDistE = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillEDir.x + ny * hillEDir.y + nz * hillEDir.z)))
+    const liftE    = arcDistE < HILL_STEP     ? 16
+                   : arcDistE < HILL_STEP * 2 ? 8
+                   : arcDistE < HILL_STEP * 3 ? 6
+                   : arcDistE < HILL_STEP * 4 ? 2
+                   : 0
+
+    const hillLift = Math.max(liftA, liftB, liftC, liftD, liftE)
+
+    const isLand = (n >= LAND_THRESHOLD && !isRiver) || isPole || hillLift > 0
     const lift   = isLand ? LAND_LIFT : 0
     const len    = Math.sqrt(x * x + y * y + z * z)
-    const scale  = (R_C + lift) / len
+    const scale  = (R_C + lift + hillLift) / len
 
     pos.setXYZ(i, x * scale, y * scale, z * scale)
 
@@ -74,7 +144,7 @@ export function createCoccolith() {
   terrainMeshes.push(surface)
 
   // --- 海面球 -------------------------------------------------
-  const oceanGeo = new THREE.SphereGeometry(R_OCEAN, 64, 48)
+  const oceanGeo = new THREE.SphereGeometry(R_OCEAN, 48, 24)
   const oceanMat = new THREE.MeshLambertMaterial({
     color: OCEAN_COLOR,
     transparent: true,
@@ -83,10 +153,55 @@ export function createCoccolith() {
   })
   group.add(new THREE.Mesh(oceanGeo, oceanMat))
 
-  // ここにオブジェクトを追加していく
-  // 例: const mountain = makeMountain(); group.add(mountain); terrainMeshes.push(mountain)
+  // --- 緯度経度グリッド ----------------------------------------
+  group.add(createLatLonGrid())
 
   return { group, terrainMeshes }
+}
+
+// 緯度10分割・経度10分割のグリッドを LineSegments で生成
+// 座標系: theta = (lon + 180) * PI/180, phi = (90 - lat) * PI/180
+const GRID_R   = 727.5  // グリッド球半径 (m)
+const GRID_SEGS = 96    // 1本の円を近似するセグメント数
+
+function createLatLonGrid() {
+  const verts = []
+
+  // 緯度線: -72, -54, -36, -18, 0, 18, 36, 54, 72（極は点なので除外）
+  for (let lat = -72; lat <= 72; lat += 18) {
+    const phi = (90 - lat) * Math.PI / 180
+    const ry  = GRID_R * Math.cos(phi)  // 輪の y 座標
+    const rr  = GRID_R * Math.sin(phi)  // 輪の半径
+    for (let i = 0; i < GRID_SEGS; i++) {
+      const t0 = (i / GRID_SEGS) * Math.PI * 2
+      const t1 = ((i + 1) / GRID_SEGS) * Math.PI * 2
+      verts.push(rr * Math.cos(t0), ry, rr * Math.sin(t0))
+      verts.push(rr * Math.cos(t1), ry, rr * Math.sin(t1))
+    }
+  }
+
+  // 経度線: 10本（-180 から 36° 刻み）
+  for (let lon = -180; lon < 180; lon += 36) {
+    const theta = (lon + 180) * Math.PI / 180
+    const cosT  = Math.cos(theta), sinT = Math.sin(theta)
+    for (let i = 0; i < GRID_SEGS; i++) {
+      const lat0 = -90 + (i / GRID_SEGS) * 180
+      const lat1 = -90 + ((i + 1) / GRID_SEGS) * 180
+      const phi0 = (90 - lat0) * Math.PI / 180
+      const phi1 = (90 - lat1) * Math.PI / 180
+      verts.push(
+        GRID_R * Math.sin(phi0) * cosT, GRID_R * Math.cos(phi0), GRID_R * Math.sin(phi0) * sinT,
+        GRID_R * Math.sin(phi1) * cosT, GRID_R * Math.cos(phi1), GRID_R * Math.sin(phi1) * sinT,
+      )
+    }
+  }
+
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+  const mat = new THREE.LineBasicMaterial({
+    color: 0xffffff, transparent: true, opacity: 0.4,
+  })
+  return new THREE.LineSegments(geo, mat)
 }
 
 // 球面上の指定緯度経度にオブジェクトを配置するユーティリティ

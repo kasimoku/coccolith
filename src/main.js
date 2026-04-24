@@ -12,7 +12,7 @@ import { R_C, LAND_LIFT, VETH_POS } from './constants.js'
 // --- レンダラー ---------------------------------------------
 const canvas = document.getElementById('c')
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-renderer.setPixelRatio(window.devicePixelRatio)
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
 renderer.setSize(window.innerWidth, window.innerHeight)
 
 // --- シーン -------------------------------------------------
@@ -30,19 +30,6 @@ sun.position.set(20000, 0, 0)
 scene.add(sun)
 scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
-// --- 星 -----------------------------------------------------
-;(function () {
-  const verts = []
-  for (let i = 0; i < 3000; i++) {
-    const phi = Math.acos(2 * Math.random() - 1)
-    const th  = Math.random() * Math.PI * 2
-    const r   = 30000
-    verts.push(r * Math.sin(phi) * Math.cos(th), r * Math.sin(phi) * Math.sin(th), r * Math.cos(phi))
-  }
-  const g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
-  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 9 })))
-})()
 
 // --- 天体 ---------------------------------------------------
 const { group: coccolith, terrainMeshes } = createCoccolith()
@@ -122,6 +109,20 @@ window.addEventListener('keyup', e => { keys[e.code] = false })
 // --- HUD ----------------------------------------------------
 const { drawCompass }       = createCompass(document.getElementById('compass'))
 const { drawVethIndicator } = createVethIndicator(document.getElementById('veth-ind'))
+const areaEl   = document.getElementById('area-code')
+const latlonEl = document.getElementById('latlon')
+
+// pDir（正規化済み球面法線）からグリッドエリアコードを返す
+// 緯度帯 A〜J（南→北）、経度帯 1〜10（西→東）
+function getAreaCode(dir) {
+  const lat = Math.asin(Math.max(-1, Math.min(1, dir.y))) * 180 / Math.PI
+  let theta = Math.atan2(dir.z, dir.x)
+  if (theta < 0) theta += Math.PI * 2
+  const lon = theta * 180 / Math.PI - 180  // -180〜180
+  const latIdx = Math.min(9, Math.floor((lat + 90) / 18))
+  const lonIdx = Math.min(9, Math.floor((lon + 180) / 36))
+  return String.fromCharCode(0x41 + latIdx) + (lonIdx + 1)
+}
 
 // --- リサイズ ------------------------------------------------
 window.addEventListener('resize', () => {
@@ -137,11 +138,14 @@ const PITCH_SPD = 1.2     // ピッチ速度 (rad/s)
 const OV_SPD    = 1.2     // 俯瞰回転速度 (rad/s)
 const OV_PITCH_MIN = -Math.PI * 0.49  // 南半球まで回せるよう負値に
 const OV_PITCH_MAX =  Math.PI * 0.49
+const TARGET_FPS = 30
+const FRAME_MS   = 1000 / TARGET_FPS
 let prev = performance.now()
 
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
+  if (now - prev < FRAME_MS) return
   const dt  = Math.min((now - prev) / 1000, 0.05)
   prev = now
 
@@ -196,6 +200,17 @@ function animate() {
     : pDir.clone().multiplyScalar(R_C + 1)
   drawCompass(pDir, pFwd)
   drawVethIndicator(hudCamPos, pDir, pFwd, VETH_POS)
+  if (overviewMode) {
+    areaEl.textContent   = ''
+    latlonEl.textContent = ''
+  } else {
+    const lat = Math.asin(Math.max(-1, Math.min(1, pDir.y))) * 180 / Math.PI
+    let theta = Math.atan2(pDir.z, pDir.x)
+    if (theta < 0) theta += Math.PI * 2
+    const lon = theta * 180 / Math.PI - 180
+    areaEl.textContent   = getAreaCode(pDir)
+    latlonEl.textContent = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
+  }
 
   renderer.render(scene, camera)
 }
