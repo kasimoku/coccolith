@@ -277,7 +277,7 @@ export function createCoccolith() {
   // --- ランドマーク #02: forest1 (lat=45.0, lon=-20.0) --------
   const forest1Wrapper = new THREE.Group()
   forest1Wrapper.add(createForest1())
-  forest1Wrapper.scale.setScalar(20)
+  forest1Wrapper.scale.setScalar(10)
   placeOnSurface(group, forest1Wrapper, 45.0, -20.0, R_C + LAND_LIFT)
 
   return { group, terrainMeshes }
