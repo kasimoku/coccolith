@@ -3,6 +3,7 @@ import { createNoise3D } from 'simplex-noise'
 import Alea from 'alea'
 import { R_C, LAND_LIFT } from './constants.js'
 import { createTORCH } from '../../my-3d-parts/landmark/TORCH.js'
+import { createForest1 } from '../../my-3d-parts/parts/forest1.jsx'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -272,6 +273,11 @@ export function createCoccolith() {
   torchWrapper.add(createTORCH())
   torchWrapper.scale.setScalar(115 / 16)
   placeOnSurface(group, torchWrapper, 0, 0, 364)
+
+  // --- ランドマーク #02: forest1 (lat=45.0, lon=-20.0) --------
+  const forest1Wrapper = new THREE.Group()
+  forest1Wrapper.add(createForest1())
+  placeOnSurface(group, forest1Wrapper, 45.0, -20.0, R_C + LAND_LIFT)
 
   return { group, terrainMeshes }
 }
