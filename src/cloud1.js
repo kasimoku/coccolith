@@ -14,13 +14,33 @@ function mulberry32(seed) {
   }
 }
 
+const flatCloudMats = {}
+function getFlatCloudMat(color) {
+  if (!flatCloudMats[color]) flatCloudMats[color] = new THREE.MeshLambertMaterial({ color })
+  return flatCloudMats[color]
+}
+
+export function createFlatCloud(seed = 0, color = 0xffffff) {
+  const group = new THREE.Group()
+  const rand = mulberry32(seed)
+  const mat = getFlatCloudMat(color)
+  for (let i = 0; i < 4; i++) {
+    const r = 2.0 + rand() * 1.5
+    const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), mat)
+    ball.position.set((rand() * 2 - 1) * 3.5, rand() * 0.5, (rand() * 2 - 1) * 3.5)
+    ball.scale.y = 0.28 + rand() * 0.08
+    ball.rotation.y = rand() * Math.PI * 2
+    group.add(ball)
+  }
+  return group
+}
+
 export function createCloud1() {
   const group = new THREE.Group()
   const rand = mulberry32(7)
 
   const whiteMat = new THREE.MeshPhongMaterial({
-    color: 0xffffff, flatShading: true, shininess: 60,
-    transparent: true, opacity: 0.8
+    color: 0xffffff, flatShading: true, shininess: 60
   })
 
   for (let i = 0; i < 6; i++) {

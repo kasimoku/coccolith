@@ -16,8 +16,8 @@ const LAND_COLOR_N    = 0x337367 // y軸+側（北半球）陸地色
 const ISLAND_GF_COLOR = 0x90876D // 島[GF] (lat 0-36°N, lon 72-108°E)
 const SEA_COLOR       = 0x1a4a52 // 海底色
 const R_OCEAN      = 364.5    // 海面球の半径 (m)
-const OCEAN_COLOR  = 0x629ec1
-const OCEAN_ALPHA  = 0.8
+const OCEAN_COLOR_A = 0x629ec1
+const OCEAN_COLOR_B = 0x5782B8
 
 // ---- 道路 -------------------------------------------------------
 const ROAD_HALF_WIDTH = 17.5   // 道幅35m の半分 (m)
@@ -180,7 +180,7 @@ export function createCoccolith() {
     // 北極・南極から半径5m（10×10相当）は強制的に陸地
     const dNorth = Math.sqrt(x*x + (y-R_C)*(y-R_C) + z*z)
     const dSouth = Math.sqrt(x*x + (y+R_C)*(y+R_C) + z*z)
-    const isPole = dNorth < 5 || dSouth < 5
+    const isPole = dNorth < 50 || dSouth < 50
     const arcDistA = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillADir.x + ny * hillADir.y + nz * hillADir.z)))
     const liftA    = arcDistA < HILL_STEP     ? 20
                    : arcDistA < HILL_STEP * 2 ? 6
@@ -251,12 +251,18 @@ export function createCoccolith() {
 
   // --- 海面球 -------------------------------------------------
   const oceanGeo = new THREE.SphereGeometry(R_OCEAN, 48, 24)
-  const oceanMat = new THREE.MeshLambertMaterial({
-    color: OCEAN_COLOR,
-    transparent: true,
-    opacity: OCEAN_ALPHA,
-    side: THREE.DoubleSide,
-  })
+  const oceanOPos = oceanGeo.attributes.position
+  const oceanColArr = new Float32Array(oceanOPos.count * 3)
+  const oceanCA = new THREE.Color(OCEAN_COLOR_A)
+  const oceanCB = new THREE.Color(OCEAN_COLOR_B)
+  for (let i = 0; i < oceanOPos.count; i++) {
+    const c = (Math.floor(i / 49) % 2 === 0) ? oceanCA : oceanCB
+    oceanColArr[i * 3]     = c.r
+    oceanColArr[i * 3 + 1] = c.g
+    oceanColArr[i * 3 + 2] = c.b
+  }
+  oceanGeo.setAttribute('color', new THREE.Float32BufferAttribute(oceanColArr, 3))
+  const oceanMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
   group.add(new THREE.Mesh(oceanGeo, oceanMat))
 
   // --- 緯度経度グリッド ----------------------------------------

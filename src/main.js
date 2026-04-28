@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { createCompass, createVethIndicator } from './hud.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
-import { createCloud1 } from './cloud1.js'
+import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, VETH_POS } from './constants.js'
 import { createSabchan } from '../../my-3d-parts/parts/sabchan.jsx'
 
@@ -66,6 +66,44 @@ cloud.scale.setScalar(6)
 cloud.position.set(0, CLOUD_H, 0)
 cloudGroup.add(cloud)
 scene.add(cloudGroup)
+
+// --- 平たい流れ雲 × 6 ----------------------------------------
+const FLAT_CLOUD_H = R_C + LAND_LIFT + 10
+const flatCloudDefs = [
+  { axis: new THREE.Vector3( 0.5,  1, -0.3).normalize(), initAngle: 0,                speed: 0.000625 },
+  { axis: new THREE.Vector3(-0.4,  1,  0.2).normalize(), initAngle: Math.PI / 3,      speed: 0.000700 },
+  { axis: new THREE.Vector3( 0.2,  1,  0.6).normalize(), initAngle: Math.PI * 2 / 3, speed: 0.000550 },
+  { axis: new THREE.Vector3(-0.3,  1, -0.5).normalize(), initAngle: Math.PI,          speed: 0.000750 },
+  { axis: new THREE.Vector3( 0.7,  1,  0.1).normalize(), initAngle: Math.PI * 4 / 3, speed: 0.000650 },
+  { axis: new THREE.Vector3(-0.6,  1, -0.2).normalize(), initAngle: Math.PI * 5 / 3, speed: 0.000600 },
+]
+const flatCloudGroups = flatCloudDefs.map(({ axis, initAngle, speed }, i) => {
+  const grp = new THREE.Group()
+  const fc = createFlatCloud(i + 10)
+  fc.scale.set(15, 5, 15)
+  fc.position.set(0, FLAT_CLOUD_H, 0)
+  grp.add(fc)
+  grp.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), initAngle)
+  scene.add(grp)
+  return { grp, axis, speed }
+})
+
+// --- 青灰色の平たい雲 × 3（Y軸下方スタート）---------------------
+const darkFlatCloudDefs = [
+  { axis: new THREE.Vector3( 0.4,  1,  0.5).normalize(), initAngle: 0,               speed: 0.000580 },
+  { axis: new THREE.Vector3(-0.5,  1, -0.3).normalize(), initAngle: Math.PI * 2 / 3, speed: 0.000640 },
+  { axis: new THREE.Vector3( 0.2,  1, -0.6).normalize(), initAngle: Math.PI * 4 / 3, speed: 0.000700 },
+]
+darkFlatCloudDefs.forEach(({ axis, initAngle, speed }, i) => {
+  const grp = new THREE.Group()
+  const fc = createFlatCloud(20 + i, 0x9AA7BB)
+  fc.scale.set(15, 5, 15)
+  fc.position.set(0, -FLAT_CLOUD_H, 0)
+  grp.add(fc)
+  grp.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), initAngle)
+  scene.add(grp)
+  flatCloudGroups.push({ grp, axis, speed })
+})
 
 // --- レイキャスター -----------------------------------------
 const raycaster = new THREE.Raycaster()
@@ -179,7 +217,10 @@ function animate() {
   veth.rotation.y += 0.003
 
   // 雲: 地表上を周回（veth 自転と同速）
-  cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.003)
+  cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.00075)
+  for (const { grp, axis, speed } of flatCloudGroups) {
+    grp.rotateOnWorldAxis(axis, speed)
+  }
 
   if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
