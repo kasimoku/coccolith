@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { createCompass, createVethIndicator } from './hud.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
+import { createCloud1 } from './cloud1.js'
 import { R_C, LAND_LIFT, VETH_POS } from './constants.js'
 
 // ============================================================
@@ -38,6 +39,19 @@ scene.add(coccolith)
 const veth = createVeth()
 veth.position.copy(VETH_POS)
 scene.add(veth)
+
+// --- 雲 -------------------------------------------------------
+// 惑星中心から (0, CLOUD_H, 0) に配置し、傾いた軸で周回
+// rotateOnWorldAxis で子の向きも一緒に回転 → 常に惑星面法線が上を向く
+const CLOUD_H = R_C + LAND_LIFT + 15
+const cloudOrbitAxis = new THREE.Vector3(0.3, 1, 0.1).normalize()
+
+const cloudGroup = new THREE.Group()
+const cloud = createCloud1()
+cloud.scale.setScalar(6)
+cloud.position.set(0, CLOUD_H, 0)
+cloudGroup.add(cloud)
+scene.add(cloudGroup)
 
 // --- レイキャスター -----------------------------------------
 const raycaster = new THREE.Raycaster()
@@ -151,6 +165,9 @@ function animate() {
 
   // veth 自転
   veth.rotation.y += 0.003
+
+  // 雲: 地表上を周回（veth 自転と同速）
+  cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.003)
 
   if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
