@@ -4,6 +4,8 @@ import Alea from 'alea'
 import { R_C, LAND_LIFT } from './constants.js'
 import { createTORCH } from '../../my-3d-parts/landmark/TORCH.js'
 import { createForest1 } from '../../my-3d-parts/parts/forest1.jsx'
+import { createFrame64 } from '../../my-3d-parts/parts/Frame_6-4.jsx'
+import { createFrameM, createFrameL } from '../../my-3d-parts/parts/Frame.jsx'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -295,6 +297,50 @@ export function createCoccolith() {
   forest1Wrapper3.add(forest1c)
   forest1Wrapper3.scale.setScalar(8)
   placeOnSurface(group, forest1Wrapper3, 62.5, 5.0, R_C + LAND_LIFT)
+
+  // --- ランドマーク #05: Frame_6-4 (lat=8.6, lon=7.0) ----------
+  const frame64Wrapper = new THREE.Group()
+  frame64Wrapper.add(createFrame64())
+  frame64Wrapper.scale.setScalar(3)
+  placeOnSurface(group, frame64Wrapper, 8.6, 7.0, R_C + LAND_LIFT)
+
+  // --- ランドマーク #06: Frame 中×4 + 大×4 (中心 lat=8.0 lon=-8.0) -----
+  // 中(M): 十字方向 ±4° (≈25m), 大(L): 斜め方向 ±7° (≈44m)
+  const FRAME_GROUP_CENTER = { lat: 8.0, lon: -8.0 }
+  const frameMLConfigs = [
+    // 中 (M) — 十字
+    { create: createFrameM, lat: FRAME_GROUP_CENTER.lat + 2, lon: FRAME_GROUP_CENTER.lon       },
+    { create: createFrameM, lat: FRAME_GROUP_CENTER.lat - 2, lon: FRAME_GROUP_CENTER.lon       },
+    { create: createFrameM, lat: FRAME_GROUP_CENTER.lat,     lon: FRAME_GROUP_CENTER.lon + 2   },
+    { create: createFrameM, lat: FRAME_GROUP_CENTER.lat,     lon: FRAME_GROUP_CENTER.lon - 2   },
+    // 大 (L) — 斜め
+    { create: createFrameL, lat: FRAME_GROUP_CENTER.lat + 3.5, lon: FRAME_GROUP_CENTER.lon + 3.5 },
+    { create: createFrameL, lat: FRAME_GROUP_CENTER.lat + 3.5, lon: FRAME_GROUP_CENTER.lon - 3.5 },
+    { create: createFrameL, lat: FRAME_GROUP_CENTER.lat - 3.5, lon: FRAME_GROUP_CENTER.lon + 3.5 },
+    { create: createFrameL, lat: FRAME_GROUP_CENTER.lat - 3.5, lon: FRAME_GROUP_CENTER.lon - 3.5 },
+  ]
+  for (const { create, lat, lon } of frameMLConfigs) {
+    const w = new THREE.Group()
+    w.add(create())
+    w.scale.setScalar(3)
+    placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT)
+  }
+
+  // --- ランドマーク #07: Frame_6-4 × 2 + FrameM × 1 -----------
+  ;[
+    { lat:  -6.4, lon: -4.8 },
+    { lat:  16.8, lon: -4.4 },
+  ].forEach(({ lat, lon }) => {
+    const w = new THREE.Group()
+    w.add(createFrame64())
+    w.scale.setScalar(3)
+    placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT)
+  })
+
+  const frameMW = new THREE.Group()
+  frameMW.add(createFrameM())
+  frameMW.scale.setScalar(3)
+  placeOnSurface(group, frameMW, 10.6, 4.0, R_C + LAND_LIFT)
 
   return { group, terrainMeshes }
 }

@@ -4,6 +4,7 @@ import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1 } from './cloud1.js'
 import { R_C, LAND_LIFT, VETH_POS } from './constants.js'
+import { createSabchan } from '../../my-3d-parts/parts/sabchan.jsx'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -39,6 +40,19 @@ scene.add(coccolith)
 const veth = createVeth()
 veth.position.copy(VETH_POS)
 scene.add(veth)
+
+// --- sabちゃん --------------------------------------------------
+// 1 unit = 0.1m スケール系のモデルを coccolith (1 unit = 1m) に合わせる
+// 足先 local y = -5.72 → scale 0.2 で -1.144m → 地表に接地
+const SAB_SCALE       = 0.2
+const SAB_FOOT_OFFSET = 5.72 * SAB_SCALE   // 足先→グループ原点（頭部中心）距離
+
+const sabchan = createSabchan(scene)
+sabchan.group.scale.setScalar(SAB_SCALE)
+
+// --- 3人称カメラ定数 -------------------------------------------
+const CAM_DIST       = 8     // sabちゃんからの距離 (m)
+const CAM_BASE_ANGLE = 0.35  // 水平面からの基本仰角 (rad)
 
 // --- 雲 -------------------------------------------------------
 // 惑星中心から (0, CLOUD_H, 0) に配置し、傾いた軸で周回
@@ -85,12 +99,10 @@ let ovPitch = Math.PI * 0.25   // 初期は斜め上から
 
 // --- 入力 ---------------------------------------------------
 const keys = {}
-const overviewCursor = document.getElementById('overview-cursor')
 
 window.addEventListener('keydown', e => {
   if (e.code === 'Tab') {
     overviewMode = !overviewMode
-    overviewCursor.style.display = overviewMode ? 'block' : 'none'
 
     if (!overviewMode) {
       // 🔴 が指していた地表点（カメラ→原点方向のレイ）を新しい立ち位置にする
@@ -182,8 +194,27 @@ function animate() {
     camera.position.set(cx, cy, cz)
     camera.up.set(0, 1, 0)
     camera.lookAt(0, 0, 0)
+
+    // カメラ→惑星中心レイの地表ヒット点に sabちゃんを配置
+    const ovRayDir = new THREE.Vector3(-cx, -cy, -cz).normalize()
+    raycaster.set(new THREE.Vector3(cx, cy, cz), ovRayDir)
+    const ovHits = raycaster.intersectObjects(terrainMeshes, false)
+    if (ovHits.length > 0) {
+      const hp = ovHits[0].point
+      const hn = hp.clone().normalize()
+      let sf = pFwd.clone()
+      sf.addScaledVector(hn, -sf.dot(hn))
+      if (sf.lengthSq() < 1e-6) {
+        sf = new THREE.Vector3(1, 0, 0)
+        sf.addScaledVector(hn, -sf.dot(hn))
+      }
+      sf.normalize()
+      const sr = new THREE.Vector3().crossVectors(hn, sf)
+      sabchan.group.setRotationFromMatrix(new THREE.Matrix4().makeBasis(sr, hn, sf))
+      sabchan.group.position.copy(hn.multiplyScalar(hp.length() + SAB_FOOT_OFFSET))
+    }
   } else {
-    // --- 通常モード: 地表追従 ---
+    // --- 通常モード: sabちゃん追従3人称 ---
     const da = (SPEED / R_C) * dt
 
     if (keys['KeyQ']) { pFwd.applyAxisAngle(pDir,  TURN_SPD * dt); pFwd.normalize() }
@@ -198,17 +229,35 @@ function animate() {
     pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
     pFwd.normalize()
 
+    // ↑↓ でカメラ仰角を操作
     if (keys['ArrowUp'])   pitch = Math.min( PITCH_MAX, pitch + PITCH_SPD * dt)
     if (keys['ArrowDown']) pitch = Math.max(-PITCH_MAX, pitch - PITCH_SPD * dt)
 
-    const camPos = pDir.clone().multiplyScalar(getGroundHeight(pDir))
-    camera.position.copy(camPos)
-    camera.up.copy(pDir)
+    // --- sabちゃん配置 ---
+    // local Y → pDir (惑星法線=上)、local Z → pFwd (進行方向=前)
+    const sabRight = new THREE.Vector3().crossVectors(pDir, pFwd)
+    const rotM = new THREE.Matrix4().makeBasis(sabRight, pDir, pFwd)
+    sabchan.group.setRotationFromMatrix(rotM)
 
-    const pitchedFwd = pFwd.clone()
-      .multiplyScalar(Math.cos(pitch))
-      .addScaledVector(pDir, Math.sin(pitch))
-    camera.lookAt(camPos.clone().addScaledVector(pitchedFwd, 10))
+    const groundH = getGroundHeight(pDir)
+    const sabPos  = pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET)
+    sabchan.group.position.copy(sabPos)
+
+    // 頭の揺れアニメ
+    const t = now / 1000
+    sabchan.head.rotation.z   = Math.sin(t * 0.51) * 0.046
+    sabchan.inhead.rotation.z = Math.sin(t * 0.51) * 0.046
+
+    // --- 3人称カメラ ---
+    // pitch を仰角オフセットとして使用（上限・下限クランプ）
+    const camAngle = Math.max(0.05, Math.min(Math.PI * 0.45, CAM_BASE_ANGLE + pitch))
+    const camOffset = pFwd.clone().multiplyScalar(-CAM_DIST * Math.cos(camAngle))
+      .addScaledVector(pDir, CAM_DIST * Math.sin(camAngle))
+    camera.position.copy(sabPos.clone().add(camOffset))
+    camera.up.copy(pDir)
+    // 胴体あたり（頭部中心から足方向へ少し）を注視
+    const lookTarget = sabPos.clone().addScaledVector(pDir, -SAB_FOOT_OFFSET * 0.4)
+    camera.lookAt(lookTarget)
   }
 
   // --- HUD ---
