@@ -2,10 +2,10 @@ import * as THREE from 'three'
 import { createNoise3D } from 'simplex-noise'
 import Alea from 'alea'
 import { R_C, LAND_LIFT } from './constants.js'
-import { createTORCH } from '../../my-3d-parts/landmark/TORCH.js'
-import { createForest1 } from '../../my-3d-parts/parts/forest1.jsx'
-import { createFrame64 } from '../../my-3d-parts/parts/Frame_6-4.jsx'
-import { createFrameM, createFrameL } from '../../my-3d-parts/parts/Frame.jsx'
+import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
+import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
+import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
+import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
 
 // ============================================================
 //  coccolith — 惑星メッシュ

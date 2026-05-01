@@ -4,7 +4,7 @@ import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, VETH_POS } from './constants.js'
-import { createSabchan } from '../../my-3d-parts/parts/sabchan.jsx'
+import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
 
 // ============================================================
 //  LMF — Layout Master File
