@@ -6,7 +6,7 @@ import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
-import { createMateris, applyMaterisColors } from '../my-3d-parts/parts/Materis.js'
+import { createMaterisMesh } from '../my-3d-parts/parts/Materis.js'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -363,17 +363,8 @@ export function createCoccolith() {
       const rng = Alea(seeds[i])
       const lat = anchors[i].lat + (rng() - 0.5) * 2
       const lon = anchors[i].lon + (rng() - 0.5) * 2
-      let geo
-      if (n === 5) {
-        geo = new THREE.CylinderGeometry(2, 2, 8, 6)
-        applyMaterisColors(geo, -4, 4)
-      } else {
-        geo = new THREE.IcosahedronGeometry(4, 1)
-      }
-      const mesh = new THREE.Mesh(geo, createMateris(n))
-      mesh.position.y = n === 5 ? 4 : 4  // 底面が地表に接するよう半径/半高さ分浮かせる
       const w = new THREE.Group()
-      w.add(mesh)
+      w.add(createMaterisMesh(n))
       placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT)
     }
   }
