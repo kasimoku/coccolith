@@ -355,6 +355,23 @@ export function createCoccolith() {
 
   // --- ランドマーク: Materis 1〜5 × 各2 ---------------------
   // Route1/2 ウェイポイント（陸地確定）をアンカーに、シード文字列で ±1° ジッター
+
+  // 地形メッシュと同じ山の計算式で hillLift を返す
+  const _hillLiftAt = (lat, lon) => {
+    const phi = (90 - lat) * Math.PI / 180
+    const theta = (lon + 180) * Math.PI / 180
+    const nx = Math.sin(phi) * Math.cos(theta)
+    const ny = Math.cos(phi)
+    const nz = Math.sin(phi) * Math.sin(theta)
+    const arc = (dir) => R_C * Math.acos(Math.max(-1, Math.min(1, nx * dir.x + ny * dir.y + nz * dir.z)))
+    const arcA = arc(hillADir); const liftA = arcA < HILL_STEP ? 20 : arcA < HILL_STEP * 2 ? 6  : 0
+    const arcB = arc(hillBDir); const liftB = arcB < HILL_STEP ? 9  : arcB < HILL_STEP * 2 ? 6  : 0
+    const arcC = arc(hillCDir); const liftC = arcC < HILL_STEP ? 20 : arcC < HILL_STEP * 2 ? 20 : arcC < HILL_STEP * 3 ? 10 : 0
+    const arcD = arc(hillDDir); const liftD = arcD < HILL_STEP ? 12 : arcD < HILL_STEP * 2 ? 6  : 0
+    const arcE = arc(hillEDir); const liftE = arcE < HILL_STEP ? 16 : arcE < HILL_STEP * 2 ? 8  : arcE < HILL_STEP * 3 ? 6  : 0
+    return Math.max(liftA, liftB, liftC, liftD, liftE)
+  }
+
   const materisDefs = [
     { n: 1, seeds: ['materis-1a', 'materis-1b'], anchors: [{ lat:  4.0, lon:  18.0 }, { lat: 33.5, lon:  -1.0 }] },
     { n: 2, seeds: ['materis-2a', 'materis-2b'], anchors: [{ lat: 46.0, lon:  25.0 }, { lat: 49.4, lon:  51.4 }] },
@@ -370,7 +387,7 @@ export function createCoccolith() {
       const lon = anchors[i].lon + (rng() - 0.5) * 2
       const w = new THREE.Group()
       w.add(_materisCreators[n]())
-      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT)
+      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT + _hillLiftAt(lat, lon))
     }
   }
 
