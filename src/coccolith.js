@@ -387,7 +387,7 @@ export function createCoccolith() {
       const lon = anchors[i].lon + (rng() - 0.5) * 2
       const w = new THREE.Group()
       w.add(_materisCreators[n]())
-      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT + _hillLiftAt(lat, lon) + 0.6)
+      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT + _hillLiftAt(lat, lon) + 5.0)
     }
   }
 
