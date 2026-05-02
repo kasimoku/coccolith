@@ -6,7 +6,11 @@ import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
-import { createMaterisMesh } from '../my-3d-parts/parts/Materis.js'
+import { createMateris1 } from '../my-3d-parts/parts/Materis1.jsx'
+import { createMateris2 } from '../my-3d-parts/parts/Materis2.jsx'
+import { createMateris3 } from '../my-3d-parts/parts/Materis3.jsx'
+import { createMateris4 } from '../my-3d-parts/parts/Materis4.jsx'
+import { createMateris5 } from '../my-3d-parts/parts/Materis5.jsx'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -358,13 +362,14 @@ export function createCoccolith() {
     { n: 4, seeds: ['materis-4a', 'materis-4b'], anchors: [{ lat: 20.3, lon: 117.0 }, { lat: 27.0, lon:-143.0 }] },
     { n: 5, seeds: ['materis-5a', 'materis-5b'], anchors: [{ lat:-13.4, lon:-137.4 }, { lat:-10.5, lon:-171.0 }] },
   ]
+  const _materisCreators = [null, createMateris1, createMateris2, createMateris3, createMateris4, createMateris5]
   for (const { n, seeds, anchors } of materisDefs) {
     for (let i = 0; i < 2; i++) {
       const rng = Alea(seeds[i])
       const lat = anchors[i].lat + (rng() - 0.5) * 2
       const lon = anchors[i].lon + (rng() - 0.5) * 2
       const w = new THREE.Group()
-      w.add(createMaterisMesh(n))
+      w.add(_materisCreators[n]())
       placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT)
     }
   }
