@@ -20,6 +20,7 @@ const LAND_COLOR      = 0x3d6b30
 const LAND_COLOR_N    = 0x337367 // y軸+側（北半球）陸地色
 const ISLAND_GF_COLOR = 0x90876D // 島[GF] (lat 0-36°N, lon 72-108°E)
 const SEA_COLOR       = 0x1a4a52 // 海底色
+const MOUNTAIN_COLOR  = 0x9D9899 // 山頂（hillLift最大値）
 const R_OCEAN      = 364.5    // 海面球の半径 (m)
 const OCEAN_COLOR_A = 0x629ec1
 const OCEAN_COLOR_B = 0x5782B8
@@ -170,6 +171,8 @@ export function createCoccolith() {
   const landNRGB     = new THREE.Color(LAND_COLOR_N)
   const islandGFRGB  = new THREE.Color(ISLAND_GF_COLOR)
   const seaRGB       = new THREE.Color(SEA_COLOR)
+  const mountainRGB  = new THREE.Color(MOUNTAIN_COLOR)
+  const _tmpC        = new THREE.Color()
 
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
@@ -228,7 +231,8 @@ export function createCoccolith() {
     const lon = lonTheta * 180 / Math.PI - 180
     const inIslandGF = isLand && lat >= 0 && lat <= 36 && lon >= 72 && lon <= 108
 
-    const c = inIslandGF ? islandGFRGB : isLand ? (y > 0 ? landNRGB : landRGB) : seaRGB
+    const baseC = inIslandGF ? islandGFRGB : isLand ? (y > 0 ? landNRGB : landRGB) : seaRGB
+    const c = hillLift > 0 ? _tmpC.lerpColors(baseC, mountainRGB, hillLift / 20) : baseC
     colors[i * 3]     = c.r
     colors[i * 3 + 1] = c.g
     colors[i * 3 + 2] = c.b
