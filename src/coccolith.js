@@ -370,8 +370,10 @@ export function createCoccolith() {
       } else {
         geo = new THREE.IcosahedronGeometry(4, 1)
       }
+      const mesh = new THREE.Mesh(geo, createMateris(n))
+      mesh.position.y = n === 5 ? 4 : 4  // 底面が地表に接するよう半径/半高さ分浮かせる
       const w = new THREE.Group()
-      w.add(new THREE.Mesh(geo, createMateris(n)))
+      w.add(mesh)
       placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT)
     }
   }
