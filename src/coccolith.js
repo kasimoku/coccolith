@@ -6,6 +6,7 @@ import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
+import { createMateris, applyMaterisColors } from '../my-3d-parts/parts/Materis.js'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -347,6 +348,33 @@ export function createCoccolith() {
   frameMW.add(createFrameM())
   frameMW.scale.setScalar(3)
   placeOnSurface(group, frameMW, 10.6, 4.0, R_C + LAND_LIFT)
+
+  // --- ランドマーク: Materis 1〜5 × 各2 ---------------------
+  // Route1/2 ウェイポイント（陸地確定）をアンカーに、シード文字列で ±1° ジッター
+  const materisDefs = [
+    { n: 1, seeds: ['materis-1a', 'materis-1b'], anchors: [{ lat:  4.0, lon:  18.0 }, { lat: 33.5, lon:  -1.0 }] },
+    { n: 2, seeds: ['materis-2a', 'materis-2b'], anchors: [{ lat: 46.0, lon:  25.0 }, { lat: 49.4, lon:  51.4 }] },
+    { n: 3, seeds: ['materis-3a', 'materis-3b'], anchors: [{ lat: 23.5, lon:  57.0 }, { lat: 40.0, lon: 107.7 }] },
+    { n: 4, seeds: ['materis-4a', 'materis-4b'], anchors: [{ lat: 20.3, lon: 117.0 }, { lat: 27.0, lon:-143.0 }] },
+    { n: 5, seeds: ['materis-5a', 'materis-5b'], anchors: [{ lat:-13.4, lon:-137.4 }, { lat:-10.5, lon:-171.0 }] },
+  ]
+  for (const { n, seeds, anchors } of materisDefs) {
+    for (let i = 0; i < 2; i++) {
+      const rng = Alea(seeds[i])
+      const lat = anchors[i].lat + (rng() - 0.5) * 2
+      const lon = anchors[i].lon + (rng() - 0.5) * 2
+      let geo
+      if (n === 5) {
+        geo = new THREE.CylinderGeometry(2, 2, 8, 6)
+        applyMaterisColors(geo, -4, 4)
+      } else {
+        geo = new THREE.IcosahedronGeometry(4, 1)
+      }
+      const w = new THREE.Group()
+      w.add(new THREE.Mesh(geo, createMateris(n)))
+      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT)
+    }
+  }
 
   return { group, terrainMeshes }
 }
