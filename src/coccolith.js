@@ -11,6 +11,7 @@ import { createMateris2 } from '../my-3d-parts/parts/Materis2.jsx'
 import { createMateris3 } from '../my-3d-parts/parts/Materis3.jsx'
 import { createMateris4 } from '../my-3d-parts/parts/Materis4.jsx'
 import { createMateris5 } from '../my-3d-parts/parts/Materis5.jsx'
+import { createLowpolyGrass1 } from '../my-3d-parts/parts/lowpoly-grass1.jsx'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -395,6 +396,16 @@ export function createCoccolith() {
     }
   }
 
+  // --- 草地フィールド ---
+  const GRASS_AREAS = [
+    [{lat:11.2,lon:-43.2},{lat:11.0,lon:-46.8},{lat:6.9,lon:-46.8},{lat:6.9,lon:-43.2}],
+    [{lat:50,lon:-100},{lat:50,lon:-114.6},{lat:30,lon:-114.6},{lat:22.7,lon:-132},{lat:12,lon:-125},{lat:26.5,lon:-100}],
+    [{lat:66,lon:-145},{lat:56,lon:-176.5},{lat:42,lon:-145},{lat:53.6,lon:-128.4}],
+    [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}],
+    [{lat:60.5,lon:162},{lat:60.5,lon:76},{lat:43.3,lon:117.2}],
+  ]
+  for (const poly of GRASS_AREAS) group.add(createGrassField(poly))
+
   return { group, terrainMeshes }
 }
 
@@ -562,3 +573,132 @@ function createRoutePoints(routes, interval = 10) {
   return new THREE.Points(geo, mat)
 }
 
+// lat/lon 矩形にローポリ草地を隙間なく敷き詰める（InstancedMesh）
+// ポリゴン内の点判定（ray casting）
+function _polyContains(lat, lon, poly) {
+  let inside = false
+  const np = poly.length
+  for (let i = 0, j = np - 1; i < np; j = i++) {
+    const ai = poly[i], aj = poly[j]
+    if ((ai.lat > lat) !== (aj.lat > lat)) {
+      const crossLon = aj.lon + (lat - aj.lat) / (ai.lat - aj.lat) * (ai.lon - aj.lon)
+      if (lon < crossLon) inside = !inside
+    }
+  }
+  return inside
+}
+
+// 点から線分までの距離 (度単位、lon方向にcosLat補正)
+function _distToSeg(plat, plon, alat, alon, blat, blon) {
+  const cosLat = Math.cos(plat * Math.PI / 180)
+  const dx = (blon - alon) * cosLat, dy = blat - alat
+  const px = (plon - alon) * cosLat, py = plat - alat
+  const lenSq = dx * dx + dy * dy
+  if (lenSq < 1e-20) return Math.sqrt(px * px + py * py)
+  const t = Math.max(0, Math.min(1, (px * dx + py * dy) / lenSq))
+  return Math.sqrt((px - t * dx) ** 2 + (py - t * dy) ** 2)
+}
+
+// ポリゴン境界をパーリンノイズでぼかして草地を配置
+// GRASS_SCALE=0.5 → max cone高さ2m、台形フットプリント1.6m、y軸90°刻みランダム回転
+function createGrassField(poly) {
+  const DEG            = Math.PI / 180
+  const GRASS_SCALE    = 0.5
+  const FOOTPRINT      = 3.2 * GRASS_SCALE   // 1.6m (台形底面幅)
+  const DENSITY        = 2 / 3               // 被覆率: (FOOTPRINT/間隔)²
+  const dlatDeg        = FOOTPRINT / (Math.sqrt(DENSITY) * R_C * DEG)
+  const EDGE_WIDTH     = 6.0   // 境界フェード幅 (度 ≈ 37.5m)
+  const NOISE_FREQ     = 25
+  const NOISE_STRENGTH = 0.8
+
+  const edgeNoise = createNoise3D(Alea('grass-edge'))
+
+  const latMin = Math.min(...poly.map(p => p.lat))
+  const latMax = Math.max(...poly.map(p => p.lat))
+  const lonMin = Math.min(...poly.map(p => p.lon))
+  const lonMax = Math.max(...poly.map(p => p.lon))
+
+  // グリッド位置を収集（境界外EDGE_WIDTH分まで走査）
+  const posBuf = []
+  for (let lat = latMin - EDGE_WIDTH; lat <= latMax + EDGE_WIDTH + 1e-9; lat += dlatDeg) {
+    const dlonDeg = dlatDeg / Math.cos(lat * DEG)
+    for (let lon = lonMin - EDGE_WIDTH; lon <= lonMax + EDGE_WIDTH + 1e-9; lon += dlonDeg) {
+      // ポリゴン境界からの符号付き距離（内側=正、外側=負）
+      const np = poly.length
+      let minDist = Infinity
+      for (let i = 0; i < np; i++) {
+        const a = poly[i], b = poly[(i + 1) % np]
+        const d = _distToSeg(lat, lon, a.lat, a.lon, b.lat, b.lon)
+        if (d < minDist) minDist = d
+      }
+      const inside      = _polyContains(lat, lon, poly)
+      const edgeFactor  = (inside ? 1 : -1) * minDist / EDGE_WIDTH
+
+      if (edgeFactor <= -NOISE_STRENGTH) continue
+      if (edgeFactor < NOISE_STRENGTH) {
+        const phi   = (90 - lat) * DEG
+        const theta = (lon + 180) * DEG
+        const nx    = Math.sin(phi) * Math.cos(theta)
+        const ny    = Math.cos(phi)
+        const nz    = Math.sin(phi) * Math.sin(theta)
+        const nv    = edgeNoise(nx * NOISE_FREQ, ny * NOISE_FREQ, nz * NOISE_FREQ)
+        if (edgeFactor + nv * NOISE_STRENGTH <= 0) continue
+      }
+      posBuf.push(lat, lon)
+    }
+  }
+  const count = posBuf.length / 2
+
+  // テンプレートからサブメッシュのジオメトリ・マテリアル・ローカル行列を取得
+  const template  = createLowpolyGrass1()
+  const subMeshes = template.children
+  const localMats = subMeshes.map(m => { m.updateMatrix(); return m.matrix.clone() })
+
+  const iMeshes = subMeshes.map(m => {
+    const im = new THREE.InstancedMesh(m.geometry, m.material, count)
+    im.castShadow    = true
+    im.receiveShadow = true
+    return im
+  })
+
+  const up       = new THREE.Vector3(0, 1, 0)
+  const yAxis    = new THREE.Vector3(0, 1, 0)
+  const normal   = new THREE.Vector3()
+  const pos3     = new THREE.Vector3()
+  const quat     = new THREE.Quaternion()
+  const yRot     = new THREE.Quaternion()
+  const scaleV   = new THREE.Vector3(GRASS_SCALE, GRASS_SCALE, GRASS_SCALE)
+  const groupMat = new THREE.Matrix4()
+  const instMat  = new THREE.Matrix4()
+  const r        = R_C + LAND_LIFT
+
+  for (let idx = 0; idx < count; idx++) {
+    const lat   = posBuf[idx * 2]
+    const lon   = posBuf[idx * 2 + 1]
+    const phi   = (90 - lat) * DEG
+    const theta = (lon + 180) * DEG
+
+    pos3.set(
+      r * Math.sin(phi) * Math.cos(theta),
+      r * Math.cos(phi),
+      r * Math.sin(phi) * Math.sin(theta)
+    )
+    normal.copy(pos3).normalize()
+    // 90°刻みランダムy軸回転（LCGハッシュで決定論的）
+    const rotStep = ((idx * 1664525 + 1013904223) >>> 0) & 3
+    yRot.setFromAxisAngle(yAxis, rotStep * Math.PI / 2)
+    quat.setFromUnitVectors(up, normal).multiply(yRot)
+    groupMat.compose(pos3, quat, scaleV)
+
+    for (let ci = 0; ci < iMeshes.length; ci++) {
+      instMat.multiplyMatrices(groupMat, localMats[ci])
+      iMeshes[ci].setMatrixAt(idx, instMat)
+    }
+  }
+
+  for (const im of iMeshes) im.instanceMatrix.needsUpdate = true
+
+  const group = new THREE.Group()
+  for (const im of iMeshes) group.add(im)
+  return group
+}
