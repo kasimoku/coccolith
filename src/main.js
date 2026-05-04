@@ -4,6 +4,8 @@ import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, VETH_POS } from './constants.js'
+import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
+import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
 
 // ============================================================
@@ -105,6 +107,32 @@ darkFlatCloudDefs.forEach(({ axis, initAngle, speed }, i) => {
   flatCloudGroups.push({ grp, axis, speed })
 })
 
+// --- 雲生き物 (kummo × 3, gummo × 3) -------------------------
+// 軌道: 球面上のランダム軸を周回、平雲と同高度・同速域
+// 向き: local +X → 進行方向 (接線 = axis × 惑星法線)
+//        local +Y → 惑星外向き (法線)
+const CREATURE_H = FLAT_CLOUD_H
+
+function randomSphereVec() {
+  const u = Math.random() * 2 - 1
+  const t = Math.random() * Math.PI * 2
+  const s = Math.sqrt(1 - u * u)
+  return new THREE.Vector3(s * Math.cos(t), u, s * Math.sin(t))
+}
+
+const creatures = [
+  createKummo, createKummo, createKummo,
+  createGummo, createGummo, createGummo,
+].map(factory => {
+  const axis  = randomSphereVec()
+  const speed = 0.000575 + Math.random() * 0.000175   // 平雲と同速域
+  const angle = Math.random() * Math.PI * 2           // 惑星上ランダム初期位置
+  const mesh  = factory()
+  mesh.scale.setScalar(6)
+  scene.add(mesh)
+  return { axis, angle, speed, mesh }
+})
+
 // --- レイキャスター -----------------------------------------
 const raycaster = new THREE.Raycaster()
 
@@ -125,7 +153,10 @@ function getGroundHeight(dir) {
 let pDir  = new THREE.Vector3(0, 1, 0)
 let pFwd  = new THREE.Vector3(1, 0, 0)
 let pitch = 0                          // 視点ピッチ (rad)
-const PITCH_MAX = Math.PI * 0.44
+// pitch をクランプする範囲を camAngle が実際に動く範囲と一致させる
+// → デッドゾーン（押しても画面が動かない区間）をなくす
+const PITCH_MAX =  Math.PI * 0.45 - CAM_BASE_ANGLE   //  ≈ +1.064 rad
+const PITCH_MIN = 0.05            - CAM_BASE_ANGLE   //  ≈ -0.300 rad
 
 // --- 俯瞰モード ---------------------------------------------
 let overviewMode = false
@@ -206,6 +237,14 @@ const TARGET_FPS = 30
 const FRAME_MS   = 1000 / TARGET_FPS
 let prev = performance.now()
 
+// 雲生き物アニメーション用一時変数（GC 抑制）
+const _crQuat = new THREE.Quaternion()
+const _crPos  = new THREE.Vector3()
+const _crUp   = new THREE.Vector3()
+const _crFwd  = new THREE.Vector3()
+const _crZ    = new THREE.Vector3()
+const _crMat  = new THREE.Matrix4()
+
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
@@ -220,6 +259,19 @@ function animate() {
   cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.00075)
   for (const { grp, axis, speed } of flatCloudGroups) {
     grp.rotateOnWorldAxis(axis, speed)
+  }
+
+  // 雲生き物: 軌道更新 + 向き更新（local +X → 進行方向）
+  for (const c of creatures) {
+    c.angle += c.speed
+    _crQuat.setFromAxisAngle(c.axis, c.angle)
+    _crPos.set(0, CREATURE_H, 0).applyQuaternion(_crQuat)
+    c.mesh.position.copy(_crPos)
+    _crUp.copy(_crPos).normalize()
+    _crFwd.crossVectors(c.axis, _crUp).normalize()  // 接線 = 進行方向
+    _crZ.crossVectors(_crUp, _crFwd)                // 右手系: Y×Z=X → crUp×crFwd
+    _crMat.makeBasis(_crZ, _crUp, _crFwd)           // +X=横, +Y=惑星法線, +Z=進行方向
+    c.mesh.setRotationFromMatrix(_crMat)
   }
 
   if (overviewMode) {
@@ -271,8 +323,8 @@ function animate() {
     pFwd.normalize()
 
     // ↑↓ でカメラ仰角を操作
-    if (keys['ArrowUp'])   pitch = Math.min( PITCH_MAX, pitch + PITCH_SPD * dt)
-    if (keys['ArrowDown']) pitch = Math.max(-PITCH_MAX, pitch - PITCH_SPD * dt)
+    if (keys['ArrowUp'])   pitch = Math.min(PITCH_MAX, pitch + PITCH_SPD * dt)
+    if (keys['ArrowDown']) pitch = Math.max(PITCH_MIN, pitch - PITCH_SPD * dt)
 
     // --- sabちゃん配置 ---
     // local Y → pDir (惑星法線=上)、local Z → pFwd (進行方向=前)

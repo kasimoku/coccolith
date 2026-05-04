@@ -144,6 +144,18 @@ export function createCoccolith() {
     Math.cos((90 - 62.0)    * Math.PI / 180),
     Math.sin((90 - 62.0)    * Math.PI / 180) * Math.sin((-101.4 + 180) * Math.PI / 180),
   )
+  // 山F: lat:-12.2° lon:-32.7° / 2段・頂上16・中段8
+  const hillFDir = new THREE.Vector3(
+    Math.sin((90 - (-12.2)) * Math.PI / 180) * Math.cos((-32.7 + 180) * Math.PI / 180),
+    Math.cos((90 - (-12.2)) * Math.PI / 180),
+    Math.sin((90 - (-12.2)) * Math.PI / 180) * Math.sin((-32.7 + 180) * Math.PI / 180),
+  )
+  // 山G: lat:-28.2° lon:-40.6° / 1段・10m
+  const hillGDir = new THREE.Vector3(
+    Math.sin((90 - (-28.2)) * Math.PI / 180) * Math.cos((-40.6 + 180) * Math.PI / 180),
+    Math.cos((90 - (-28.2)) * Math.PI / 180),
+    Math.sin((90 - (-28.2)) * Math.PI / 180) * Math.sin((-40.6 + 180) * Math.PI / 180),
+  )
 
   // --- 地表メッシュ -------------------------------------------
   const geo = new THREE.SphereGeometry(R_C, 64, 64)
@@ -217,7 +229,16 @@ export function createCoccolith() {
                    : arcDistE < HILL_STEP * 3 ? 6
                    : 0
 
-    const hillLift = Math.max(liftA, liftB, liftC, liftD, liftE)
+    const arcDistF = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillFDir.x + ny * hillFDir.y + nz * hillFDir.z)))
+    const liftF    = arcDistF < HILL_STEP     ? 16
+                   : arcDistF < HILL_STEP * 2 ? 8
+                   : 0
+
+    const arcDistG = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillGDir.x + ny * hillGDir.y + nz * hillGDir.z)))
+    const liftG    = arcDistG < HILL_STEP     ? 10
+                   : 0
+
+    const hillLift = Math.max(liftA, liftB, liftC, liftD, liftE, liftF, liftG)
 
     const isLand = (n >= LAND_THRESHOLD && !isRiver) || isPole || hillLift > 0
     const lift   = isLand ? LAND_LIFT : 0
@@ -374,7 +395,9 @@ export function createCoccolith() {
     const arcC = arc(hillCDir); const liftC = arcC < HILL_STEP ? 20 : arcC < HILL_STEP * 2 ? 20 : arcC < HILL_STEP * 3 ? 10 : 0
     const arcD = arc(hillDDir); const liftD = arcD < HILL_STEP ? 12 : arcD < HILL_STEP * 2 ? 6  : 0
     const arcE = arc(hillEDir); const liftE = arcE < HILL_STEP ? 16 : arcE < HILL_STEP * 2 ? 8  : arcE < HILL_STEP * 3 ? 6  : 0
-    return Math.max(liftA, liftB, liftC, liftD, liftE)
+    const arcF = arc(hillFDir); const liftF = arcF < HILL_STEP ? 16 : arcF < HILL_STEP * 2 ? 8  : 0
+    const arcG = arc(hillGDir); const liftG = arcG < HILL_STEP ? 10 : 0
+    return Math.max(liftA, liftB, liftC, liftD, liftE, liftF, liftG)
   }
 
   const materisDefs = [
@@ -402,9 +425,9 @@ export function createCoccolith() {
     [{lat:50,lon:-100},{lat:50,lon:-114.6},{lat:30,lon:-114.6},{lat:22.7,lon:-132},{lat:12,lon:-125},{lat:26.5,lon:-100}],
     [{lat:66,lon:-145},{lat:56,lon:-176.5},{lat:42,lon:-145},{lat:53.6,lon:-128.4}],
     [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}],
-    [{lat:60.5,lon:162},{lat:60.5,lon:76},{lat:43.3,lon:117.2}],
+    [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
-  for (const poly of GRASS_AREAS) group.add(createGrassField(poly))
+  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D))
 
   return { group, terrainMeshes }
 }
@@ -601,7 +624,7 @@ function _distToSeg(plat, plon, alat, alon, blat, blon) {
 
 // ポリゴン境界をパーリンノイズでぼかして草地を配置
 // GRASS_SCALE=0.5 → max cone高さ2m、台形フットプリント1.6m、y軸90°刻みランダム回転
-function createGrassField(poly) {
+function createGrassField(poly, noise3D) {
   const DEG            = Math.PI / 180
   const GRASS_SCALE    = 0.5
   const FOOTPRINT      = 3.2 * GRASS_SCALE   // 1.6m (台形底面幅)
@@ -618,10 +641,20 @@ function createGrassField(poly) {
   const lonMin = Math.min(...poly.map(p => p.lon))
   const lonMax = Math.max(...poly.map(p => p.lon))
 
+  // 海岸バッファ: 候補点から20m以内に海があればスキップ
+  // 20m = (20/R_C)*(180/π) ≈ 3.2° のアーク角
+  const COAST_DEG = (20 / R_C) * (180 / Math.PI)
+  const landN = (plat, plon) => {
+    const pp = (90 - plat) * DEG, pt = (plon + 180) * DEG
+    const x = Math.sin(pp) * Math.cos(pt), y = Math.cos(pp), z = Math.sin(pp) * Math.sin(pt)
+    return noise3D(x*1.8,y*1.8,z*1.8)*0.7 + noise3D(x*4.2,y*4.2,z*4.2)*0.2 + noise3D(x*9.0,y*9.0,z*9.0)*0.1
+  }
+
   // グリッド位置を収集（境界外EDGE_WIDTH分まで走査）
   const posBuf = []
   for (let lat = latMin - EDGE_WIDTH; lat <= latMax + EDGE_WIDTH + 1e-9; lat += dlatDeg) {
     const dlonDeg = dlatDeg / Math.cos(lat * DEG)
+    const dlon20  = COAST_DEG / Math.cos(lat * DEG)
     for (let lon = lonMin - EDGE_WIDTH; lon <= lonMax + EDGE_WIDTH + 1e-9; lon += dlonDeg) {
       // ポリゴン境界からの符号付き距離（内側=正、外側=負）
       const np = poly.length
@@ -635,13 +668,27 @@ function createGrassField(poly) {
       const edgeFactor  = (inside ? 1 : -1) * minDist / EDGE_WIDTH
 
       if (edgeFactor <= -NOISE_STRENGTH) continue
+
+      const phi   = (90 - lat) * DEG
+      const theta = (lon + 180) * DEG
+      const nx    = Math.sin(phi) * Math.cos(theta)
+      const ny    = Math.cos(phi)
+      const nz    = Math.sin(phi) * Math.sin(theta)
+
+      // 地形と同じノイズ式で陸地判定 — 海の点はスキップ
+      const n = noise3D(nx * 1.8, ny * 1.8, nz * 1.8) * 0.7
+              + noise3D(nx * 4.2, ny * 4.2, nz * 4.2) * 0.2
+              + noise3D(nx * 9.0, ny * 9.0, nz * 9.0) * 0.1
+      if (n < LAND_THRESHOLD) continue
+
+      // 4近傍20m以内に海があれば海岸バッファとしてスキップ
+      if (landN(lat + COAST_DEG, lon        ) < LAND_THRESHOLD ||
+          landN(lat - COAST_DEG, lon        ) < LAND_THRESHOLD ||
+          landN(lat,             lon + dlon20) < LAND_THRESHOLD ||
+          landN(lat,             lon - dlon20) < LAND_THRESHOLD) continue
+
       if (edgeFactor < NOISE_STRENGTH) {
-        const phi   = (90 - lat) * DEG
-        const theta = (lon + 180) * DEG
-        const nx    = Math.sin(phi) * Math.cos(theta)
-        const ny    = Math.cos(phi)
-        const nz    = Math.sin(phi) * Math.sin(theta)
-        const nv    = edgeNoise(nx * NOISE_FREQ, ny * NOISE_FREQ, nz * NOISE_FREQ)
+        const nv = edgeNoise(nx * NOISE_FREQ, ny * NOISE_FREQ, nz * NOISE_FREQ)
         if (edgeFactor + nv * NOISE_STRENGTH <= 0) continue
       }
       posBuf.push(lat, lon)
