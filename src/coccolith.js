@@ -12,6 +12,7 @@ import { createMateris3 } from '../my-3d-parts/parts/Materis3.jsx'
 import { createMateris4 } from '../my-3d-parts/parts/Materis4.jsx'
 import { createMateris5 } from '../my-3d-parts/parts/Materis5.jsx'
 import { createLowpolyGrass1 } from '../my-3d-parts/parts/lowpoly-grass1.jsx'
+import { createEB_v87 } from '../my-3d-parts/parts/EB_v87.jsx'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -428,6 +429,24 @@ export function createCoccolith() {
     [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
   for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D))
+
+  // --- EB_v87 (lat=-72, lon=90) --------------------------------
+  // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
+  const _ebLat = -72 * Math.PI / 180
+  const _ebTheta = (90 + 180) * Math.PI / 180
+  const ebN = new THREE.Vector3(
+    Math.cos(_ebLat) * Math.cos(_ebTheta),
+    Math.sin(_ebLat),
+    Math.cos(_ebLat) * Math.sin(_ebTheta)
+  ).normalize()
+  const ebFwd = new THREE.Vector3(0, 1, 0).addScaledVector(ebN, new THREE.Vector3(0, 1, 0).dot(ebN) * -1).normalize()
+  const ebRight = new THREE.Vector3().crossVectors(ebN, ebFwd)
+  const ebWrapper = new THREE.Group()
+  ebWrapper.add(createEB_v87())
+  ebWrapper.scale.setScalar(6)
+  ebWrapper.position.copy(ebN.clone().multiplyScalar(R_C + LAND_LIFT + 15))
+  ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
+  group.add(ebWrapper)
 
   return { group, terrainMeshes }
 }
