@@ -5,6 +5,9 @@ export default defineConfig({
   server: {
     fs: {
       allow: ['..']
+    },
+    watch: {
+      ignored: ['!**/my-3d-parts/**']
     }
   }
 })

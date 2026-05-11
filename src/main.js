@@ -71,6 +71,8 @@ const SAB_FOOT_OFFSET = 5.72 * SAB_SCALE   // 足先→グループ原点（頭�
 
 const sabchan = createSabchan(scene)
 sabchan.group.scale.setScalar(SAB_SCALE)
+// sabchan.group の子のうち Group 型 = headGroup（耳・パッド含む）
+const _sabHeadGroup = sabchan.group.children.find(c => c.isGroup) ?? null
 
 // --- 3人称カメラ定数 -------------------------------------------
 const CAM_DIST       = 8     // sabちゃんからの距離 (m)
@@ -259,8 +261,10 @@ const FRAME_MS   = 1000 / TARGET_FPS
 let prev = performance.now()
 
 // 雲生き物アニメーション用一時変数（GC 抑制）
-const _crQuat = new THREE.Quaternion()
+const _crQuat     = new THREE.Quaternion()
 const _vethWorldPos = new THREE.Vector3()
+const _spinQuat   = new THREE.Quaternion()
+const _spinAxis   = new THREE.Vector3(0, 1, 0)
 
 // 霧エフェクト用カラー定数
 const _fogColorNormal = new THREE.Color(0x000510)
@@ -368,15 +372,27 @@ function animate() {
     const sabRight = new THREE.Vector3().crossVectors(pDir, pFwd)
     const rotM = new THREE.Matrix4().makeBasis(sabRight, pDir, pFwd)
     sabchan.group.setRotationFromMatrix(rotM)
+    // 2分に1回、1秒かけてy軸360°スピン
+    const spinPhase = (now / 1000) % 120
+    if (spinPhase < 1.0) {
+      _spinQuat.setFromAxisAngle(_spinAxis, spinPhase * Math.PI * 2)
+      sabchan.group.quaternion.multiply(_spinQuat)
+    }
 
     const groundH = getGroundHeight(pDir)
     const sabPos  = pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET)
-    sabchan.group.position.copy(sabPos)
+    const floatOffset = Math.sin(now * 0.00035) * 0.2
+    sabchan.group.position.copy(pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET + floatOffset))
 
     // 頭の揺れアニメ
     const t = now / 1000
-    sabchan.head.rotation.z   = Math.sin(t * 0.51) * 0.046
-    sabchan.inhead.rotation.z = Math.sin(t * 0.51) * 0.046
+    if (_sabHeadGroup) {
+      _sabHeadGroup.rotation.z = Math.sin(t * 0.51) * 0.06
+      _sabHeadGroup.rotation.x = Math.sin(t * 0.37) * 0.12
+    }
+    const pulse = 1.0 + Math.sin(t * 2.8) * 0.35
+    if (sabchan.nose)   sabchan.nose.scale.setScalar(pulse)
+    if (sabchan.sensor) sabchan.sensor.scale.setScalar(pulse)
 
     // --- 3人称カメラ ---
     // pitch を仰角オフセットとして使用（上限・下限クランプ）
