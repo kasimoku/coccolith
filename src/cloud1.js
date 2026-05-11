@@ -30,6 +30,7 @@ export function createFlatCloud(seed = 0, color = 0xffffff) {
     ball.position.set((rand() * 2 - 1) * 3.5, rand() * 0.5, (rand() * 2 - 1) * 3.5)
     ball.scale.y = 0.28 + rand() * 0.08
     ball.rotation.y = rand() * Math.PI * 2
+    ball.castShadow = true
     group.add(ball)
   }
   return group

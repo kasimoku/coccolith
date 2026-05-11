@@ -24,7 +24,7 @@ const LAND_COLOR_N    = 0x337367 // y軸+側（北半球）陸地色
 const ISLAND_GF_COLOR = 0x90876D // 島[GF] (lat 0-36°N, lon 72-108°E)
 const SEA_COLOR       = 0x1a4a52 // 海底色
 const MOUNTAIN_COLOR  = 0x9D9899 // 山頂（hillLift最大値）
-const R_OCEAN      = 364.5    // 海面球の半径 (m)
+const R_OCEAN      = 364      // 海面球の半径 (m)
 const OCEAN_COLOR_A = 0x629ec1
 const OCEAN_COLOR_B = 0x5782B8
 
@@ -295,8 +295,9 @@ export function createCoccolith() {
     oceanColArr[i * 3 + 2] = c.b
   }
   oceanGeo.setAttribute('color', new THREE.Float32BufferAttribute(oceanColArr, 3))
-  const oceanMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
-  group.add(new THREE.Mesh(oceanGeo, oceanMat))
+  const oceanMat  = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
+  const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat)
+  group.add(oceanMesh)
 
   // --- 緯度経度グリッド ----------------------------------------
   group.add(createLatLonGrid())
@@ -456,7 +457,7 @@ export function createCoccolith() {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes }
+  return { group, terrainMeshes, oceanMesh }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
@@ -744,7 +745,7 @@ function createGrassField(poly, noise3D) {
   const scaleV   = new THREE.Vector3(GRASS_SCALE, GRASS_SCALE, GRASS_SCALE)
   const groupMat = new THREE.Matrix4()
   const instMat  = new THREE.Matrix4()
-  const r        = R_C + LAND_LIFT
+  const r        = R_C + LAND_LIFT - 0.3
 
   for (let idx = 0; idx < count; idx++) {
     const lat   = posBuf[idx * 2]

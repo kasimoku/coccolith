@@ -3,7 +3,7 @@ import { createCompass, createVethIndicator } from './hud.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
-import { R_C, LAND_LIFT, VETH_POS } from './constants.js'
+import { R_C, LAND_LIFT, ORBIT } from './constants.js'
 import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
@@ -18,11 +18,13 @@ const canvas = document.getElementById('c')
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
 renderer.setSize(window.innerWidth, window.innerHeight)
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap
 
 // --- シーン -------------------------------------------------
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x00000a)
-scene.fog = new THREE.FogExp2(0x000510, 0.00038)
+scene.fog = new THREE.Fog(0x000510, 99999, 100000)  // 初期は無効
 
 // --- カメラ -------------------------------------------------
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 50000)
@@ -31,17 +33,35 @@ const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerH
 // 太陽: 真横 (+X方向) 固定
 const sun = new THREE.DirectionalLight(0xfff5e0, 3.0)
 sun.position.set(20000, 0, 0)
+sun.castShadow = true
+sun.shadow.mapSize.width  = 2048
+sun.shadow.mapSize.height = 2048
+sun.shadow.camera.near   = 19600
+sun.shadow.camera.far    = 20400
+sun.shadow.camera.left   = -420
+sun.shadow.camera.right  =  420
+sun.shadow.camera.top    =  420
+sun.shadow.camera.bottom = -420
+sun.shadow.intensity     = 0.2
 scene.add(sun)
 scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes } = createCoccolith()
+const { group: coccolith, terrainMeshes, oceanMesh } = createCoccolith()
+terrainMeshes.forEach(m => m.receiveShadow = true)
+oceanMesh.receiveShadow = true
 scene.add(coccolith)
 
+const VETH_ORBIT_PERIOD = 2 * 3600            // 2時間（秒）
+const vethOrbitAxis = new THREE.Vector3(0.2, 1, 0).normalize()
+
+const vethOrbitGroup = new THREE.Group()
+scene.add(vethOrbitGroup)
+
 const veth = createVeth()
-veth.position.copy(VETH_POS)
-scene.add(veth)
+veth.position.set(ORBIT, 0, 0)
+vethOrbitGroup.add(veth)
 
 // --- sabちゃん --------------------------------------------------
 // 1 unit = 0.1m スケール系のモデルを coccolith (1 unit = 1m) に合わせる
@@ -67,42 +87,43 @@ const cloud = createCloud1()
 cloud.scale.setScalar(6)
 cloud.position.set(0, CLOUD_H, 0)
 cloudGroup.add(cloud)
+cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, Math.random() * Math.PI * 2)
 scene.add(cloudGroup)
 
 // --- 平たい流れ雲 × 6 ----------------------------------------
 const FLAT_CLOUD_H = R_C + LAND_LIFT + 10
 const flatCloudDefs = [
-  { axis: new THREE.Vector3( 0.5,  1, -0.3).normalize(), initAngle: 0,                speed: 0.000625 },
-  { axis: new THREE.Vector3(-0.4,  1,  0.2).normalize(), initAngle: Math.PI / 3,      speed: 0.000700 },
-  { axis: new THREE.Vector3( 0.2,  1,  0.6).normalize(), initAngle: Math.PI * 2 / 3, speed: 0.000550 },
-  { axis: new THREE.Vector3(-0.3,  1, -0.5).normalize(), initAngle: Math.PI,          speed: 0.000750 },
-  { axis: new THREE.Vector3( 0.7,  1,  0.1).normalize(), initAngle: Math.PI * 4 / 3, speed: 0.000650 },
-  { axis: new THREE.Vector3(-0.6,  1, -0.2).normalize(), initAngle: Math.PI * 5 / 3, speed: 0.000600 },
+  { axis: new THREE.Vector3( 0.5,  1, -0.3).normalize(), speed: 0.000625 },
+  { axis: new THREE.Vector3(-0.4,  1,  0.2).normalize(), speed: 0.000700 },
+  { axis: new THREE.Vector3( 0.2,  1,  0.6).normalize(), speed: 0.000550 },
+  { axis: new THREE.Vector3(-0.3,  1, -0.5).normalize(), speed: 0.000750 },
+  { axis: new THREE.Vector3( 0.7,  1,  0.1).normalize(), speed: 0.000650 },
+  { axis: new THREE.Vector3(-0.6,  1, -0.2).normalize(), speed: 0.000600 },
 ]
-const flatCloudGroups = flatCloudDefs.map(({ axis, initAngle, speed }, i) => {
+const flatCloudGroups = flatCloudDefs.map(({ axis, speed }, i) => {
   const grp = new THREE.Group()
   const fc = createFlatCloud(i + 10)
   fc.scale.set(15, 5, 15)
   fc.position.set(0, FLAT_CLOUD_H, 0)
   grp.add(fc)
-  grp.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), initAngle)
+  grp.rotateOnWorldAxis(axis, Math.random() * Math.PI * 2)
   scene.add(grp)
   return { grp, axis, speed }
 })
 
 // --- 青灰色の平たい雲 × 3（Y軸下方スタート）---------------------
 const darkFlatCloudDefs = [
-  { axis: new THREE.Vector3( 0.4,  1,  0.5).normalize(), initAngle: 0,               speed: 0.000580 },
-  { axis: new THREE.Vector3(-0.5,  1, -0.3).normalize(), initAngle: Math.PI * 2 / 3, speed: 0.000640 },
-  { axis: new THREE.Vector3( 0.2,  1, -0.6).normalize(), initAngle: Math.PI * 4 / 3, speed: 0.000700 },
+  { axis: new THREE.Vector3( 0.4,  1,  0.5).normalize(), speed: 0.000580 },
+  { axis: new THREE.Vector3(-0.5,  1, -0.3).normalize(), speed: 0.000640 },
+  { axis: new THREE.Vector3( 0.2,  1, -0.6).normalize(), speed: 0.000700 },
 ]
-darkFlatCloudDefs.forEach(({ axis, initAngle, speed }, i) => {
+darkFlatCloudDefs.forEach(({ axis, speed }, i) => {
   const grp = new THREE.Group()
   const fc = createFlatCloud(20 + i, 0x9AA7BB)
   fc.scale.set(15, 5, 15)
   fc.position.set(0, -FLAT_CLOUD_H, 0)
   grp.add(fc)
-  grp.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), initAngle)
+  grp.rotateOnWorldAxis(axis, Math.random() * Math.PI * 2)
   scene.add(grp)
   flatCloudGroups.push({ grp, axis, speed })
 })
@@ -239,6 +260,17 @@ let prev = performance.now()
 
 // 雲生き物アニメーション用一時変数（GC 抑制）
 const _crQuat = new THREE.Quaternion()
+const _vethWorldPos = new THREE.Vector3()
+
+// 霧エフェクト用カラー定数
+const _fogColorNormal = new THREE.Color(0x000510)
+const _fogColorPolar  = new THREE.Color(0x9CB8E9)
+const _bgColorNormal  = new THREE.Color(0x00000a)
+const _fogColorEdge   = new THREE.Color(0x453168)  // 0〜70m
+const _fogColorMid    = new THREE.Color(0xca8789)  // 70〜100m
+const _activeFogColor = new THREE.Color()
+const _FOG_RAMP1 = Math.sin(70  / R_C)  // 70m 境界
+const _FOG_RAMP2 = Math.sin(100 / R_C)  // 100m 境界
 const _crPos  = new THREE.Vector3()
 const _crUp   = new THREE.Vector3()
 const _crFwd  = new THREE.Vector3()
@@ -252,8 +284,13 @@ function animate() {
   const dt  = Math.min((now - prev) / 1000, 0.05)
   prev = now
 
-  // veth 自転
+  // veth 自転 + 公転（2時間で1周）
   veth.rotation.y += 0.003
+  vethOrbitGroup.rotateOnWorldAxis(vethOrbitAxis, (Math.PI * 2 / VETH_ORBIT_PERIOD) * dt)
+
+  // 海面球: veth方向へ1mオフセット（潮汐効果）
+  veth.getWorldPosition(_vethWorldPos)
+  oceanMesh.position.copy(_vethWorldPos).normalize().multiplyScalar(1)
 
   // 雲: 地表上を周回（veth 自転と同速）
   cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.00075)
@@ -353,12 +390,28 @@ function animate() {
     camera.lookAt(lookTarget)
   }
 
+  // --- 北極霧（y軸頂点から20m以内で発生、35mまでフェード）---
+  const polarT = overviewMode ? 0 : Math.max(0, pDir.x)
+  // 3色グラデーション: #522E8E(0m) → #ca8789(70m) → #9CB8E9(100m〜)
+  if (polarT <= 0) {
+    _activeFogColor.copy(_fogColorEdge)
+  } else if (polarT <= _FOG_RAMP1) {
+    _activeFogColor.copy(_fogColorEdge).lerp(_fogColorMid, polarT / _FOG_RAMP1)
+  } else {
+    _activeFogColor.copy(_fogColorMid).lerp(_fogColorPolar, Math.min(1, (polarT - _FOG_RAMP1) / (_FOG_RAMP2 - _FOG_RAMP1)))
+  }
+  scene.fog.near = THREE.MathUtils.lerp(99999, 250, polarT)
+  scene.fog.far  = THREE.MathUtils.lerp(100000, 700, polarT)
+  scene.fog.color.copy(_fogColorNormal).lerp(_activeFogColor, polarT)
+  scene.background.copy(_bgColorNormal).lerp(_activeFogColor, polarT)
+
   // --- HUD ---
   const hudCamPos = overviewMode
     ? camera.position.clone()
     : pDir.clone().multiplyScalar(R_C + 1)
   drawCompass(pDir, pFwd)
-  drawVethIndicator(hudCamPos, pDir, pFwd, VETH_POS)
+  veth.getWorldPosition(_vethWorldPos)
+  drawVethIndicator(hudCamPos, pDir, pFwd, _vethWorldPos)
   if (overviewMode) {
     areaEl.textContent   = ''
     latlonEl.textContent = ''
