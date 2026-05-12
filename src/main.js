@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
@@ -224,6 +225,8 @@ window.addEventListener('keydown', e => {
 })
 window.addEventListener('keyup', e => { keys[e.code] = false })
 
+initJoysticks()
+
 // --- HUD ----------------------------------------------------
 const { drawCompass }       = createCompass(document.getElementById('compass'))
 const { drawVethIndicator } = createVethIndicator(document.getElementById('veth-ind'))
@@ -317,10 +320,10 @@ function animate() {
 
   if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
-    if (keys['KeyA'] || keys['KeyQ']) ovYaw += OV_SPD * dt
-    if (keys['KeyD'] || keys['KeyE']) ovYaw -= OV_SPD * dt
-    if (keys['ArrowUp'])  ovPitch  = Math.min(OV_PITCH_MAX, ovPitch + OV_SPD * dt)
-    if (keys['ArrowDown'])ovPitch  = Math.max(OV_PITCH_MIN, ovPitch - OV_SPD * dt)
+    const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) - vJoy.rx
+    const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - vJoy.ry
+    if (Math.abs(ovTurnIn)  > 0.01) ovYaw   += OV_SPD * dt * Math.max(-1, Math.min(1, ovTurnIn))
+    if (Math.abs(ovPitchIn) > 0.01) ovPitch  = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, ovPitch + OV_SPD * dt * Math.max(-1, Math.min(1, ovPitchIn))))
 
     const cx = OVERVIEW_DIST * Math.cos(ovPitch) * Math.sin(ovYaw)
     const cy = OVERVIEW_DIST * Math.sin(ovPitch)
@@ -351,21 +354,21 @@ function animate() {
     // --- 通常モード: sabちゃん追従3人称 ---
     const da = (SPEED / R_C) * dt
 
-    if (keys['KeyQ']) { pFwd.applyAxisAngle(pDir,  TURN_SPD * dt); pFwd.normalize() }
-    if (keys['KeyE']) { pFwd.applyAxisAngle(pDir, -TURN_SPD * dt); pFwd.normalize() }
+    const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - vJoy.rx
+    if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
 
     const axisWS = new THREE.Vector3().crossVectors(pDir, pFwd)
-    if (keys['KeyW']) { pDir.applyAxisAngle(axisWS,  da); pDir.normalize() }
-    if (keys['KeyS']) { pDir.applyAxisAngle(axisWS, -da); pDir.normalize() }
-    if (keys['KeyD']) { pDir.applyAxisAngle(pFwd,  da);   pDir.normalize() }
-    if (keys['KeyA']) { pDir.applyAxisAngle(pFwd, -da);   pDir.normalize() }
+    const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
+    if (Math.abs(fbIn) > 0.01) { pDir.applyAxisAngle(axisWS, da * Math.max(-1, Math.min(1, fbIn))); pDir.normalize() }
+    const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
+    if (Math.abs(lrIn) > 0.01) { pDir.applyAxisAngle(pFwd,   da * Math.max(-1, Math.min(1, lrIn))); pDir.normalize() }
 
     pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
     pFwd.normalize()
 
-    // ↑↓ でカメラ仰角を操作
-    if (keys['ArrowUp'])   pitch = Math.min(PITCH_MAX, pitch + PITCH_SPD * dt)
-    if (keys['ArrowDown']) pitch = Math.max(PITCH_MIN, pitch - PITCH_SPD * dt)
+    // ↑↓ / 右ジョイスティック Y でカメラ仰角を操作
+    const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - vJoy.ry
+    if (Math.abs(pitchIn) > 0.01) pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
 
     // --- sabちゃん配置 ---
     // local Y → pDir (惑星法線=上)、local Z → pFwd (進行方向=前)
