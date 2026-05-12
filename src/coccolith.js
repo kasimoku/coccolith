@@ -3,6 +3,7 @@ import { createNoise3D } from 'simplex-noise'
 import Alea from 'alea'
 import { R_C, LAND_LIFT } from './constants.js'
 import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
+import { createChairTree } from '../my-3d-parts/landmark/chairtree.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
@@ -438,6 +439,14 @@ export function createCoccolith() {
     [{lat:-44,lon:-134},{lat:-67,lon:-114},{lat:-67,lon:-151.6}],
   ]
   for (const poly of FIELD01_AREAS) group.add(createField01Area(poly, noise3D))
+
+  // --- ランドマーク: ChairTree (lat=65, lon=-180) ---------------
+  const chairTreeWrapper = new THREE.Group()
+  const chairTree = createChairTree()
+  chairTree.rotation.y = Math.PI / 2
+  chairTreeWrapper.add(chairTree)
+  chairTreeWrapper.scale.setScalar(6)
+  placeOnSurface(group, chairTreeWrapper, 65, -180, R_C + LAND_LIFT)
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
